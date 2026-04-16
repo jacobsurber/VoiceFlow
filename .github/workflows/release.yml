@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -27,6 +27,14 @@ jobs:
             exit 1
           fi
           echo "VERSION=$FILE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Verify tag is on master
+        run: |
+          if ! git branch -r --contains "$GITHUB_REF" | grep -q 'origin/master'; then
+            echo "❌ Tag $GITHUB_REF_NAME is not on master branch — aborting release"
+            exit 1
+          fi
+          echo "✅ Tag is on master"
 
       - name: Run tests
         run: swift test
