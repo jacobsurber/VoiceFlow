@@ -2,8 +2,11 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - master
+    paths-ignore:
+      - "*.md"
+      - "LICENSE"
 
 permissions:
   contents: write
@@ -22,23 +25,33 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify tag matches VERSION file
+      - name: Resolve release version
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
           FILE_VERSION="$(cat VERSION | tr -d '[:space:]')"
-          if [ "$TAG_VERSION" != "$FILE_VERSION" ]; then
-            echo "❌ Tag version ($TAG_VERSION) does not match VERSION file ($FILE_VERSION)"
-            exit 1
-          fi
-          echo "VERSION=$FILE_VERSION" >> "$GITHUB_ENV"
+          TAG="v$FILE_VERSION"
 
-      - name: Verify tag is on master
-        run: |
-          if ! git branch -r --contains "$GITHUB_REF" | grep -q 'origin/master'; then
-            echo "❌ Tag $GITHUB_REF_NAME is not on master branch — aborting release"
-            exit 1
+          if git tag -l "$TAG" | grep -q "$TAG"; then
+            echo "ℹ️ Tag $TAG already exists — auto-bumping patch version"
+            # Increment patch: 2.1.0 → 2.1.1, 2.1.9 → 2.1.10
+            MAJOR=$(echo "$FILE_VERSION" | cut -d. -f1)
+            MINOR=$(echo "$FILE_VERSION" | cut -d. -f2)
+            PATCH=$(echo "$FILE_VERSION" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            # Keep bumping if that tag also exists (e.g. missed multiple merges)
+            while git tag -l "v$NEW_VERSION" | grep -q "v$NEW_VERSION"; do
+              PATCH=$((PATCH + 1))
+              NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            done
+            echo "$NEW_VERSION" > VERSION
+            echo "VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
+            echo "VERSION_BUMPED=true" >> "$GITHUB_ENV"
+            echo "🚀 Auto-bumped VERSION to $NEW_VERSION"
+          else
+            echo "VERSION=$FILE_VERSION" >> "$GITHUB_ENV"
+            echo "VERSION_BUMPED=false" >> "$GITHUB_ENV"
+            echo "🚀 Will release $TAG"
           fi
-          echo "✅ Tag is on master"
 
       - name: Run tests
         run: swift test
@@ -137,11 +150,24 @@ jobs:
             "${APP_NAME}-${VERSION}.dmg"
           rm -rf "$STAGING"
 
-      - name: Create GitHub Release
+      - name: Create tag and GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          TAG="v$VERSION"
+
+          # If version was auto-bumped, commit the updated VERSION file back to master
+          if [ "$VERSION_BUMPED" = "true" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add VERSION
+            git commit -m "chore: bump VERSION to $VERSION [skip ci]"
+            git push origin HEAD:master
+          fi
+
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" \
             "${APP_NAME}-${VERSION}.zip" \
             "${APP_NAME}-${VERSION}.dmg" \
             --title "$APP_NAME $VERSION" \
