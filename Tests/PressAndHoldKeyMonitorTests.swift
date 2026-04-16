@@ -1,7 +1,7 @@
 import AppKit
 import XCTest
 
-@testable import VoiceFlow
+@testable import Whisp
 
 final class PressAndHoldKeyMonitorTests: XCTestCase {
     private var addedEvents: [(NSEvent.EventTypeMask, (NSEvent) -> Void)] = []

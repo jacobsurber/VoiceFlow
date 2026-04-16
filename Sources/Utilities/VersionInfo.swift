@@ -14,7 +14,7 @@ struct VersionInfo {
     }
     
     static var fullVersionInfo: String {
-        var info = "VoiceFlow \(version)"
+        var info = "Whisp \(version)"
         if gitHash != "dev-build" && gitHash != "unknown" && !gitHash.isEmpty {
             let shortHash = String(gitHash.prefix(7))
             info += " • \(shortHash)"

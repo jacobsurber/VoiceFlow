@@ -19,7 +19,7 @@ internal final class CategoryStore {
         } else {
             self.storageURL = try? fileManager
                 .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                .appendingPathComponent("VoiceFlow/categories.json", isDirectory: false)
+                .appendingPathComponent("Whisp/categories.json", isDirectory: false)
         }
 
         let defaults = CategoryDefinition.defaults

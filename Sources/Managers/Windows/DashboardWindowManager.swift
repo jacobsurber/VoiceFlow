@@ -48,7 +48,7 @@ internal final class DashboardWindowManager: NSObject {
         
         window.collectionBehavior = [NSWindow.CollectionBehavior.moveToActiveSpace, NSWindow.CollectionBehavior.fullScreenAuxiliary]
         window.contentViewController = hostingController
-        window.title = "VoiceFlow Dashboard"
+        window.title = "Whisp Dashboard"
         window.setContentSize(initialSize)
         window.minSize = minimumSize
         window.center()

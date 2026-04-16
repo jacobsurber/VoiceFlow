@@ -31,7 +31,7 @@ internal struct UvBootstrap {
     static func projectDir() throws -> URL {
         let fm = FileManager.default
         let appSupportBase = try applicationSupportBaseDirectory()
-        let appSupport = appSupportBase.appendingPathComponent("VoiceFlow", isDirectory: true)
+        let appSupport = appSupportBase.appendingPathComponent("Whisp", isDirectory: true)
         if !fm.fileExists(atPath: appSupport.path) {
             try fm.createDirectory(at: appSupport, withIntermediateDirectories: true)
         }
@@ -65,7 +65,7 @@ internal struct UvBootstrap {
         }
         // Per-user tools dir
         if let toolsURL = try? applicationSupportBaseDirectory()
-            .appendingPathComponent("VoiceFlow/bin", isDirectory: true) {
+            .appendingPathComponent("Whisp/bin", isDirectory: true) {
             let url = toolsURL.appendingPathComponent("uv")
             if FileManager.default.isExecutableFile(atPath: url.path) {
                 if let ver = try? uvVersion(at: url) {
@@ -137,7 +137,7 @@ internal struct UvBootstrap {
     // Allow tests to override the base Application Support directory via env var
     private static func applicationSupportBaseDirectory() throws -> URL {
         let fm = FileManager.default
-        if let override = ProcessInfo.processInfo.environment["VOICEFLOW_APP_SUPPORT_DIR"], !override.isEmpty {
+        if let override = ProcessInfo.processInfo.environment["WHISP_APP_SUPPORT_DIR"], !override.isEmpty {
             let url = URL(fileURLWithPath: override, isDirectory: true)
             if !fm.fileExists(atPath: url.path) {
                 try fm.createDirectory(at: url, withIntermediateDirectories: true)

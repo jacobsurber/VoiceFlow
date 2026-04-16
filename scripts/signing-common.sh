@@ -1,27 +1,27 @@
 #!/bin/bash
 
-VOICEFLOW_LOCAL_SIGNING_NAME="VoiceFlow Local Development"
+WHISP_LOCAL_SIGNING_NAME="Whisp Local Development"
 
-voiceflow_list_signing_identities() {
+whisp_list_signing_identities() {
   security find-identity -v -p codesigning 2>/dev/null || true
 }
 
-voiceflow_identity_line_for_pattern() {
+whisp_identity_line_for_pattern() {
   local pattern="$1"
-  voiceflow_list_signing_identities | grep "$pattern" | head -1 || true
+  whisp_list_signing_identities | grep "$pattern" | head -1 || true
 }
 
-voiceflow_identity_hash_from_line() {
+whisp_identity_hash_from_line() {
   local line="$1"
   echo "$line" | awk '{print $2}'
 }
 
-voiceflow_identity_name_from_line() {
+whisp_identity_name_from_line() {
   local line="$1"
   echo "$line" | sed -n 's/.*"\([^"]*\)".*/\1/p'
 }
 
-voiceflow_identity_name_for_identity() {
+whisp_identity_name_for_identity() {
   local identity="$1"
   local line=""
 
@@ -30,35 +30,35 @@ voiceflow_identity_name_for_identity() {
   fi
 
   if echo "$identity" | grep -Eq '^[A-Fa-f0-9]{40}$'; then
-    line=$(voiceflow_list_signing_identities | awk -v hash="$identity" '$2 == hash { print; exit }')
+    line=$(whisp_list_signing_identities | awk -v hash="$identity" '$2 == hash { print; exit }')
   else
-    line=$(voiceflow_list_signing_identities | grep -F "\"$identity\"" | head -1 || true)
+    line=$(whisp_list_signing_identities | grep -F "\"$identity\"" | head -1 || true)
   fi
 
   if [ -n "$line" ]; then
-    voiceflow_identity_name_from_line "$line"
+    whisp_identity_name_from_line "$line"
     return 0
   fi
 
   echo "$identity"
 }
 
-voiceflow_is_developer_id_identity() {
+whisp_is_developer_id_identity() {
   local identity="$1"
   local resolved_name=""
 
-  resolved_name="$(voiceflow_identity_name_for_identity "$identity" || true)"
+  resolved_name="$(whisp_identity_name_for_identity "$identity" || true)"
   [[ "$resolved_name" == Developer\ ID\ Application* ]]
 }
 
-voiceflow_detect_signing_identity() {
-  local explicit_identity="${CODE_SIGN_IDENTITY:-${VOICEFLOW_CODE_SIGN_IDENTITY:-}}"
+whisp_detect_signing_identity() {
+  local explicit_identity="${CODE_SIGN_IDENTITY:-${WHISP_CODE_SIGN_IDENTITY:-}}"
   local line=""
   local patterns=(
     "Developer ID Application"
     "Apple Development"
     "Mac Developer"
-    "$VOICEFLOW_LOCAL_SIGNING_NAME"
+    "$WHISP_LOCAL_SIGNING_NAME"
   )
   local pattern
 
@@ -68,9 +68,9 @@ voiceflow_detect_signing_identity() {
   fi
 
   for pattern in "${patterns[@]}"; do
-    line=$(voiceflow_identity_line_for_pattern "$pattern")
+    line=$(whisp_identity_line_for_pattern "$pattern")
     if [ -n "$line" ]; then
-      voiceflow_identity_hash_from_line "$line"
+      whisp_identity_hash_from_line "$line"
       return 0
     fi
   done
@@ -78,14 +78,14 @@ voiceflow_detect_signing_identity() {
   return 1
 }
 
-voiceflow_detect_signing_identity_name() {
-  local explicit_identity="${CODE_SIGN_IDENTITY:-${VOICEFLOW_CODE_SIGN_IDENTITY:-}}"
+whisp_detect_signing_identity_name() {
+  local explicit_identity="${CODE_SIGN_IDENTITY:-${WHISP_CODE_SIGN_IDENTITY:-}}"
   local line=""
   local patterns=(
     "Developer ID Application"
     "Apple Development"
     "Mac Developer"
-    "$VOICEFLOW_LOCAL_SIGNING_NAME"
+    "$WHISP_LOCAL_SIGNING_NAME"
   )
   local pattern
 
@@ -95,9 +95,9 @@ voiceflow_detect_signing_identity_name() {
   fi
 
   for pattern in "${patterns[@]}"; do
-    line=$(voiceflow_identity_line_for_pattern "$pattern")
+    line=$(whisp_identity_line_for_pattern "$pattern")
     if [ -n "$line" ]; then
-      voiceflow_identity_name_from_line "$line"
+      whisp_identity_name_from_line "$line"
       return 0
     fi
   done
@@ -105,7 +105,7 @@ voiceflow_detect_signing_identity_name() {
   return 1
 }
 
-voiceflow_signature_kind() {
+whisp_signature_kind() {
   local app_path="$1"
   local details
 
@@ -122,7 +122,7 @@ voiceflow_signature_kind() {
   echo "stable"
 }
 
-voiceflow_sign_app_bundle() {
+whisp_sign_app_bundle() {
   local app_path="$1"
   local entitlements_path="$2"
   local nested_binary_path="$3"
@@ -138,7 +138,7 @@ voiceflow_sign_app_bundle() {
   fi
 
   if [ "$sign_target" = "-" ]; then
-    codesign --force --deep --sign - --identifier "com.voiceflow.app" "$app_path"
+    codesign --force --deep --sign - --identifier "com.whisp.app" "$app_path"
   else
     codesign --force --deep --sign "$sign_target" --options runtime --entitlements "$entitlements_path" "$app_path"
   fi

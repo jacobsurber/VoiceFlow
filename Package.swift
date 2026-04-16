@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "VoiceFlow",
+    name: "Whisp",
     platforms: [
         .macOS(.v14)
     ],
@@ -13,7 +13,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "VoiceFlow",
+            name: "Whisp",
             dependencies: ["Alamofire", "WhisperKit"],
             path: "Sources",
             exclude: ["VersionInfo.swift.template"],
@@ -27,8 +27,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "VoiceFlowTests",
-            dependencies: ["VoiceFlow"],
+            name: "WhispTests",
+            dependencies: ["Whisp"],
             path: "Tests",
             exclude: ["README.md", "test_parakeet_transcribe.py", "__Snapshots__"]
         ),

@@ -1,5 +1,5 @@
 import XCTest
-@testable import VoiceFlow
+@testable import Whisp
 
 final class MLDaemonManagerTests: XCTestCase {
     private let manager = MLDaemonManager.shared

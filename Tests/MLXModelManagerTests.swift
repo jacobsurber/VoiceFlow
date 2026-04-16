@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import VoiceFlow
+@testable import Whisp
 
 @MainActor
 final class MLXModelManagerTests: XCTestCase {
@@ -26,7 +26,7 @@ final class MLXModelManagerTests: XCTestCase {
     }
 
     func testHuggingFaceCacheUsesHubSubdirectory() {
-        let cacheRoot = URL(fileURLWithPath: "/tmp/voiceflow-hf-cache", isDirectory: true)
+        let cacheRoot = URL(fileURLWithPath: "/tmp/whisp-hf-cache", isDirectory: true)
         let modelDirectory = HuggingFaceCache.modelDirectory(
             for: "mlx-community/parakeet-tdt-0.6b-v3",
             rootDirectory: cacheRoot
@@ -34,7 +34,7 @@ final class MLXModelManagerTests: XCTestCase {
 
         XCTAssertEqual(
             modelDirectory.path,
-            "/tmp/voiceflow-hf-cache/hub/models--mlx-community--parakeet-tdt-0.6b-v3"
+            "/tmp/whisp-hf-cache/hub/models--mlx-community--parakeet-tdt-0.6b-v3"
         )
     }
 

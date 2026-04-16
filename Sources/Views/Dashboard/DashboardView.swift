@@ -120,7 +120,7 @@ internal struct DashboardView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("VoiceFlow")
+                    Text("Whisp")
                         .font(.title2)
                         .fontWeight(.bold)
                     Text("Settings")

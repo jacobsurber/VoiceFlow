@@ -264,7 +264,7 @@ internal struct FloatingMicrophoneDockView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         .buttonStyle(.plain)
-        .help("Open VoiceFlow settings")
+        .help("Open Whisp settings")
     }
 
     private var expandedDock: some View {
@@ -394,7 +394,7 @@ internal struct FloatingMicrophoneDockView: View {
             .background(smallCapsuleBackground)
         }
         .buttonStyle(.plain)
-        .help("Open VoiceFlow settings")
+        .help("Open Whisp settings")
     }
 
     private var selectedPressAndHoldKey: PressAndHoldKey {
@@ -445,7 +445,7 @@ internal struct FloatingMicrophoneDockView: View {
         case .permissionRequired:
             return "Request microphone access"
         case .processing:
-            return "VoiceFlow is transcribing"
+            return "Whisp is transcribing"
         case .success:
             return "Ready for the next dictation"
         default:
@@ -456,19 +456,19 @@ internal struct FloatingMicrophoneDockView: View {
     private var accessibilityLabel: String {
         switch viewModel.status {
         case .recording:
-            return "VoiceFlow dock, currently recording"
+            return "Whisp dock, currently recording"
         case .processing:
-            return "VoiceFlow dock, processing transcript"
+            return "Whisp dock, processing transcript"
         case .success:
-            return "VoiceFlow dock, transcription completed"
+            return "Whisp dock, transcription completed"
         case .permissionRequired:
-            return "VoiceFlow dock, microphone permission required"
+            return "Whisp dock, microphone permission required"
         case .error(let message):
-            return "VoiceFlow dock, error: \(message)"
+            return "Whisp dock, error: \(message)"
         case .downloadingModel(let message):
-            return "VoiceFlow dock, model download in progress: \(message)"
+            return "Whisp dock, model download in progress: \(message)"
         case .ready:
-            return "VoiceFlow dock, ready to record"
+            return "Whisp dock, ready to record"
         }
     }
 
@@ -477,7 +477,7 @@ internal struct FloatingMicrophoneDockView: View {
         case .recording:
             return "Use the left button to cancel or the right button to stop and transcribe."
         case .processing:
-            return "VoiceFlow is currently processing audio."
+            return "Whisp is currently processing audio."
         default:
             return
                 "Hover to expand the dock. Click the main pill to start dictation, or use the smaller pill for settings."

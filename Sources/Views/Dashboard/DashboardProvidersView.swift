@@ -359,7 +359,7 @@ internal struct DashboardProvidersView: View {
                     isShowing: $showOpenAIKey,
                     placeholder: "sk-..."
                 ) {
-                    saveAPIKey(openAIKey, service: "VoiceFlow", account: "OpenAI")
+                    saveAPIKey(openAIKey, service: "Whisp", account: "OpenAI")
                 }
             }
 
@@ -371,7 +371,7 @@ internal struct DashboardProvidersView: View {
                     isShowing: $showGeminiKey,
                     placeholder: "AIza..."
                 ) {
-                    saveAPIKey(geminiKey, service: "VoiceFlow", account: "Gemini")
+                    saveAPIKey(geminiKey, service: "Whisp", account: "Gemini")
                 }
             }
 

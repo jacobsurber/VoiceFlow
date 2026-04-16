@@ -1,9 +1,9 @@
 import Foundation
 import os.log
 
-// Centralized logging for VoiceFlow
+// Centralized logging for Whisp
 internal extension Logger {
-    private static var subsystem = Bundle.main.bundleIdentifier ?? "com.voiceflow.app"
+    private static var subsystem = Bundle.main.bundleIdentifier ?? "com.whisp.app"
     
     static let modelManager = Logger(subsystem: subsystem, category: "ModelManager")
     static let audioRecorder = Logger(subsystem: subsystem, category: "AudioRecorder")

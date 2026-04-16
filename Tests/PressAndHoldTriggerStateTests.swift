@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import VoiceFlow
+@testable import Whisp
 
 final class PressAndHoldTriggerStateTests: XCTestCase {
     func testKeyDownBeginsAsyncStartWhenIdleAndPermitted() {

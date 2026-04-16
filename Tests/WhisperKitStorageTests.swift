@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import VoiceFlow
+@testable import Whisp
 
 final class WhisperKitStorageTests: XCTestCase {
     private let requiredCoreMLBundles = [
@@ -11,18 +11,18 @@ final class WhisperKitStorageTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        unsetenv("VOICEFLOW_WHISPERKIT_DOWNLOAD_BASE")
+        unsetenv("WHISP_WHISPERKIT_DOWNLOAD_BASE")
     }
 
     override func tearDown() {
-        unsetenv("VOICEFLOW_WHISPERKIT_DOWNLOAD_BASE")
+        unsetenv("WHISP_WHISPERKIT_DOWNLOAD_BASE")
         super.tearDown()
     }
 
     func testDownloadBaseDefaultsToDocumentsHuggingFaceBase() {
-        let documentsDirectory = URL(fileURLWithPath: "/tmp/voiceflow-documents", isDirectory: true)
+        let documentsDirectory = URL(fileURLWithPath: "/tmp/whisp-documents", isDirectory: true)
         let applicationSupportDirectory = URL(
-            fileURLWithPath: "/tmp/voiceflow-app-support", isDirectory: true)
+            fileURLWithPath: "/tmp/whisp-app-support", isDirectory: true)
 
         let downloadBase = WhisperKitStorage.downloadBaseDirectory(
             documentsDirectory: documentsDirectory,
@@ -33,10 +33,10 @@ final class WhisperKitStorageTests: XCTestCase {
             applicationSupportDirectory: applicationSupportDirectory
         )
 
-        XCTAssertEqual(downloadBase?.path, "/tmp/voiceflow-documents/huggingface")
+        XCTAssertEqual(downloadBase?.path, "/tmp/whisp-documents/huggingface")
         XCTAssertEqual(
             storageDirectory?.path,
-            "/tmp/voiceflow-documents/huggingface/models/argmaxinc/whisperkit-coreml"
+            "/tmp/whisp-documents/huggingface/models/argmaxinc/whisperkit-coreml"
         )
     }
 
@@ -55,7 +55,7 @@ final class WhisperKitStorageTests: XCTestCase {
         let legacyModelDirectory =
             applicationSupportDirectory
             .appendingPathComponent(
-                "VoiceFlow/huggingface/models/argmaxinc/whisperkit-coreml/\(WhisperModel.base.whisperKitModelName)",
+                "Whisp/huggingface/models/argmaxinc/whisperkit-coreml/\(WhisperModel.base.whisperKitModelName)",
                 isDirectory: true
             )
 
@@ -94,7 +94,7 @@ final class WhisperKitStorageTests: XCTestCase {
         let legacyModelDirectory =
             applicationSupportDirectory
             .appendingPathComponent(
-                "VoiceFlow/huggingface/models/argmaxinc/whisperkit-coreml/\(WhisperModel.small.whisperKitModelName)",
+                "Whisp/huggingface/models/argmaxinc/whisperkit-coreml/\(WhisperModel.small.whisperKitModelName)",
                 isDirectory: true
             )
 
@@ -118,7 +118,7 @@ final class WhisperKitStorageTests: XCTestCase {
     }
 
     func testEnvironmentOverrideResolvesConfiguredDownloadBase() {
-        setenv("VOICEFLOW_WHISPERKIT_DOWNLOAD_BASE", "/tmp/custom-whisper-base", 1)
+        setenv("WHISP_WHISPERKIT_DOWNLOAD_BASE", "/tmp/custom-whisper-base", 1)
 
         let downloadBase = WhisperKitStorage.downloadBaseDirectory()
         let storageDirectory = WhisperKitStorage.storageDirectory()
@@ -141,7 +141,7 @@ final class WhisperKitStorageTests: XCTestCase {
                 isDirectory: true
             )
 
-        setenv("VOICEFLOW_WHISPERKIT_DOWNLOAD_BASE", downloadBase.path, 1)
+        setenv("WHISP_WHISPERKIT_DOWNLOAD_BASE", downloadBase.path, 1)
         defer { try? FileManager.default.removeItem(at: root) }
 
         for bundle in requiredCoreMLBundles {

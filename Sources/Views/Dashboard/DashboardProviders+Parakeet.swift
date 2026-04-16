@@ -159,7 +159,7 @@ internal extension DashboardProvidersView {
 
     private func venvPythonPath() -> String {
         let appSupport = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
-        let base = appSupport?.appendingPathComponent("VoiceFlow/python_project/.venv/bin/python3").path
+        let base = appSupport?.appendingPathComponent("Whisp/python_project/.venv/bin/python3").path
         return base ?? ""
     }
 

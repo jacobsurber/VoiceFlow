@@ -1,7 +1,7 @@
 import XCTest
 import AVFoundation
 import AudioToolbox
-@testable import VoiceFlow
+@testable import Whisp
 
 final class AudioProcessorTests: XCTestCase {
     func testLoadAudioReadsSamplesVerbatimAtSameRate() throws {

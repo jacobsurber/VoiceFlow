@@ -1,5 +1,5 @@
 import XCTest
-@testable import VoiceFlow
+@testable import Whisp
 
 @MainActor
 final class AppCategoryManagerTests: XCTestCase {
@@ -7,7 +7,7 @@ final class AppCategoryManagerTests: XCTestCase {
     private var defaults: UserDefaults!
     private var categoryStore: CategoryStore!
     private var tempURL: URL!
-    private let suiteName = "com.voiceflow.tests.categories"
+    private let suiteName = "com.whisp.tests.categories"
 
     override func setUp() async throws {
         defaults = UserDefaults(suiteName: suiteName)

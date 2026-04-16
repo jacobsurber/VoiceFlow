@@ -53,23 +53,23 @@ internal class AccessibilityPermissionManager {
             let alert = NSAlert()
             alert.messageText = "Accessibility Permission Required"
             alert.informativeText = """
-            VoiceFlow needs Accessibility permission for key features to work:
+            Whisp needs Accessibility permission for key features to work:
 
             🎯 What It Enables:
             • Press & Hold shortcut key detection (global keyboard monitoring)
             • Smart Paste — automatically pastes transcribed text into your apps
 
             🔒 Privacy Protection:
-            • VoiceFlow ONLY monitors modifier keys and sends paste commands
+            • Whisp ONLY monitors modifier keys and sends paste commands
             • It never reads, monitors, or accesses content from other applications
             • No screen recording or keylogging occurs
             • All transcription happens locally on your device
 
             ⚙️ What Happens Next:
             • Click "Grant Permission" to open System Settings
-            • Find VoiceFlow in Privacy & Security → Accessibility
+            • Find Whisp in Privacy & Security → Accessibility
             • Toggle the switch to enable the permission
-            • Return to VoiceFlow
+            • Return to Whisp
 
             ✋ Note:
             Without this permission, the Press & Hold shortcut key will not work.
@@ -159,7 +159,7 @@ internal class AccessibilityPermissionManager {
         
         SmartPaste is now enabled and will automatically paste transcribed text into your applications.
         
-        You can disable SmartPaste anytime in VoiceFlow's Settings if you prefer manual control.
+        You can disable SmartPaste anytime in Whisp's Settings if you prefer manual control.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Great!")
@@ -182,7 +182,7 @@ internal class AccessibilityPermissionManager {
         💡 What to do next:
         • Try using SmartPaste - it might work now
         • Use Settings → Show Manual Instructions to set it up manually
-        • Restart VoiceFlow if the permission still doesn't work
+        • Restart Whisp if the permission still doesn't work
         
         You can always paste transcribed text manually using ⌘V.
         """
@@ -211,9 +211,9 @@ internal class AccessibilityPermissionManager {
             • Automation tools like Keyboard Maestro
             • Text expanders and productivity apps
             
-            🔍 Why VoiceFlow Needs This Permission:
+            🔍 Why Whisp Needs This Permission:
             
-            VoiceFlow needs to send a simple "paste" command (equivalent to pressing ⌘V) to place transcribed text in the right location. Without this permission, you'd need to manually:
+            Whisp needs to send a simple "paste" command (equivalent to pressing ⌘V) to place transcribed text in the right location. Without this permission, you'd need to manually:
             1. Remember which app you were using
             2. Switch back to that app
             3. Find the right text field
@@ -221,7 +221,7 @@ internal class AccessibilityPermissionManager {
             
             🔒 Security Safeguards:
             
-            • VoiceFlow is sandboxed and can't access other app's data
+            • Whisp is sandboxed and can't access other app's data
             • It only sends paste commands, never reads content
             • All permissions are revocable in System Settings
             • You maintain full control over when recordings happen
@@ -244,16 +244,16 @@ internal class AccessibilityPermissionManager {
             
             1. Open System Settings (click "Open Settings" below)
             2. Go to Privacy & Security → Accessibility
-            3. Find VoiceFlow in the list
+            3. Find Whisp in the list
             4. Toggle the switch to enable it
-            5. Return to VoiceFlow
+            5. Return to Whisp
             
-            If VoiceFlow isn't in the list, you may need to add it manually using the "+" button.
+            If Whisp isn't in the list, you may need to add it manually using the "+" button.
             
             💡 Troubleshooting:
             • If the toggle appears grayed out, click the lock icon and enter your password
-            • If VoiceFlow doesn't appear in the list, try restarting VoiceFlow
-            • You may need to remove and re-add VoiceFlow if it's not working
+            • If Whisp doesn't appear in the list, try restarting Whisp
+            • You may need to remove and re-add Whisp if it's not working
             """
             alert.alertStyle = .informational
             alert.addButton(withTitle: "Open System Settings")
@@ -308,9 +308,9 @@ internal class AccessibilityPermissionManager {
                 troubleshootingInfo: """
                 To enable SmartPaste:
                 1. Open System Settings → Privacy & Security → Accessibility
-                2. Add VoiceFlow to the list (using + button if needed)
-                3. Toggle the switch to enable VoiceFlow
-                4. Restart VoiceFlow if needed
+                2. Add Whisp to the list (using + button if needed)
+                3. Toggle the switch to enable Whisp
+                4. Restart Whisp if needed
                 """
             )
         }
@@ -329,9 +329,9 @@ internal class AccessibilityPermissionManager {
             You can still enable SmartPaste manually:
             1. Open System Settings
             2. Go to Privacy & Security → Accessibility
-            3. Add VoiceFlow and enable it
+            3. Add Whisp and enable it
             
-            Or continue using VoiceFlow without SmartPaste - transcribed text will be copied to your clipboard for manual pasting.
+            Or continue using Whisp without SmartPaste - transcribed text will be copied to your clipboard for manual pasting.
             """
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Open System Settings")
@@ -350,11 +350,11 @@ internal class AccessibilityPermissionManager {
             let alert = NSAlert()
             alert.messageText = "SmartPaste Disabled"
             alert.informativeText = """
-            VoiceFlow will continue to work without SmartPaste functionality.
+            Whisp will continue to work without SmartPaste functionality.
             
             Transcribed text will be copied to your clipboard, and you can paste it manually using ⌘V.
             
-            You can enable SmartPaste anytime in VoiceFlow Settings → General → Accessibility Permissions.
+            You can enable SmartPaste anytime in Whisp Settings → General → Accessibility Permissions.
             """
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")

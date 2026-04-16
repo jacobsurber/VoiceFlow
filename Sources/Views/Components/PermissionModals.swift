@@ -29,8 +29,8 @@ internal struct PermissionEducationModal: View {
 
                 Text(
                     enableSmartPaste
-                        ? "VoiceFlow needs permissions to work properly:"
-                        : "VoiceFlow needs microphone access to record audio:"
+                        ? "Whisp needs permissions to work properly:"
+                        : "Whisp needs microphone access to record audio:"
                 )
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -92,7 +92,7 @@ internal struct PermissionRecoveryModal: View {
                     .font(.title2)
                     .fontWeight(.semibold)
 
-                Text("VoiceFlow needs microphone and accessibility permissions to work properly.")
+                Text("Whisp needs microphone and accessibility permissions to work properly.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
 
@@ -106,13 +106,13 @@ internal struct PermissionRecoveryModal: View {
                     HStack {
                         Text("2.")
                             .fontWeight(.semibold)
-                        Text("Enable VoiceFlow in 'Microphone' section")
+                        Text("Enable Whisp in 'Microphone' section")
                     }
 
                     HStack {
                         Text("3.")
                             .fontWeight(.semibold)
-                        Text("Enable VoiceFlow in 'Accessibility' section")
+                        Text("Enable Whisp in 'Accessibility' section")
                     }
                 }
                 .font(.callout)

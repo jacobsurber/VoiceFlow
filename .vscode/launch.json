@@ -4,21 +4,21 @@
       "type": "swift",
       "request": "launch",
       "args": [],
-      "cwd": "${workspaceFolder:VoiceFlow}",
-      "name": "Debug VoiceFlow",
-      "target": "VoiceFlow",
+      "cwd": "${workspaceFolder:Whisp}",
+      "name": "Debug Whisp",
+      "target": "Whisp",
       "configuration": "debug",
-      "preLaunchTask": "swift: Build Debug VoiceFlow"
+      "preLaunchTask": "swift: Build Debug Whisp"
     },
     {
       "type": "swift",
       "request": "launch",
       "args": [],
-      "cwd": "${workspaceFolder:VoiceFlow}",
-      "name": "Release VoiceFlow",
-      "target": "VoiceFlow",
+      "cwd": "${workspaceFolder:Whisp}",
+      "name": "Release Whisp",
+      "target": "Whisp",
       "configuration": "release",
-      "preLaunchTask": "swift: Build Release VoiceFlow"
+      "preLaunchTask": "swift: Build Release Whisp"
     }
   ]
 }

@@ -1,4 +1,4 @@
-# Fix VoiceFlow Accessibility Permission
+# Fix Whisp Accessibility Permission
 
 ## Problem
 
@@ -8,7 +8,7 @@ The same root cause can also affect Microphone and Input Monitoring after a rebu
 
 ## Why This Happens
 
-When VoiceFlow is rebuilt with ad-hoc signing, the code signature changes. macOS treats it as a "new" app and can block Accessibility, Input Monitoring, or re-prompt for Microphone, even though the old entry still shows in System Settings.
+When Whisp is rebuilt with ad-hoc signing, the code signature changes. macOS treats it as a "new" app and can block Accessibility, Input Monitoring, or re-prompt for Microphone, even though the old entry still shows in System Settings.
 
 The durable fix is to create a stable local signing identity once:
 
@@ -24,25 +24,25 @@ After that, macOS should keep the same privacy permissions across rebuilds.
 ### Step 1: Remove Old Entry
 
 1. Open **System Settings** → **Privacy & Security** → **Accessibility**
-2. Find **VoiceFlow** in the list (you might see multiple entries or an old one with a different icon)
+2. Find **Whisp** in the list (you might see multiple entries or an old one with a different icon)
 3. Click the **-** (minus) button to remove it
-4. If you see multiple VoiceFlow entries, remove **all** of them
+4. If you see multiple Whisp entries, remove **all** of them
 
-### Step 2: Quit VoiceFlow
+### Step 2: Quit Whisp
 
 ```bash
-pkill -x VoiceFlow
+pkill -x Whisp
 ```
 
 ### Step 3: Re-Add Fresh Entry
 
-1. Launch VoiceFlow: `open /Applications/VoiceFlow.app`
+1. Launch Whisp: `open /Applications/Whisp.app`
 2. Try to record something (press your hotkey)
-3. VoiceFlow will show a dialog explaining accessibility permission
+3. Whisp will show a dialog explaining accessibility permission
 4. Click **"Grant Permission"**
 5. System Settings will open to Accessibility
 6. Click the **+** (plus) button
-7. Navigate to **Applications** → select **VoiceFlow.app**
+7. Navigate to **Applications** → select **Whisp.app**
 8. Make sure the toggle is **ON**
 
 ### Step 4: Test Smart Paste
@@ -59,7 +59,7 @@ pkill -x VoiceFlow
 
 If you prefer manual pasting:
 
-1. Open VoiceFlow Settings
+1. Open Whisp Settings
 2. Disable "Smart Paste"
 3. After transcription, manually press ⌘V to paste
 
@@ -68,7 +68,7 @@ If you prefer manual pasting:
 If the above doesn't work, the app likely needs a stable signature. Run:
 
 ```bash
-cd /path/to/VoiceFlow
+cd /path/to/Whisp
 make setup-local-signing
 make install
 ```

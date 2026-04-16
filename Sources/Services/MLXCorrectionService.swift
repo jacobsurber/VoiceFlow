@@ -44,7 +44,7 @@ internal protocol MLDaemonManaging {
 extension MLDaemonManager: MLDaemonManaging {}
 
 internal final class MLXCorrectionService {
-    private let logger = Logger(subsystem: "com.voiceflow.app", category: "MLXCorrectionService")
+    private let logger = Logger(subsystem: "com.whisp.app", category: "MLXCorrectionService")
     private let daemon: MLDaemonManaging
     private let promptLoader: () -> String?
 
@@ -114,7 +114,7 @@ internal final class MLXCorrectionService {
             in: .userDomainMask,
             appropriateFor: nil,
             create: false
-        ).appendingPathComponent("VoiceFlow/prompts", isDirectory: true) else {
+        ).appendingPathComponent("Whisp/prompts", isDirectory: true) else {
             return nil
         }
         

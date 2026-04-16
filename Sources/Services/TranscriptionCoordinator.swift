@@ -229,7 +229,7 @@ internal final class TranscriptionCoordinator {
     }
 
     private func currentSourceAppInfo() -> SourceAppInfo {
-        // Get the frontmost app that's not VoiceFlow
+        // Get the frontmost app that's not Whisp
         if let frontmostApp = NSWorkspace.shared.frontmostApplication,
             frontmostApp.bundleIdentifier != Bundle.main.bundleIdentifier
         {
@@ -251,7 +251,7 @@ internal final class TranscriptionCoordinator {
         let alert = NSAlert()
         alert.messageText = "Smart Paste Requires Accessibility Permission"
         alert.informativeText =
-            "VoiceFlow needs Accessibility permission to type text into other apps. Your transcription has been copied to the clipboard.\n\nTo enable Smart Paste:\n1. Open System Settings > Privacy & Security > Accessibility\n2. Add VoiceFlow and toggle it ON"
+            "Whisp needs Accessibility permission to type text into other apps. Your transcription has been copied to the clipboard.\n\nTo enable Smart Paste:\n1. Open System Settings > Privacy & Security > Accessibility\n2. Add Whisp and toggle it ON"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Open Accessibility Settings")
         alert.addButton(withTitle: "OK")

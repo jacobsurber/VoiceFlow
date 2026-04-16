@@ -1,7 +1,7 @@
 import XCTest
 import Foundation
 import AVFoundation
-@testable import VoiceFlow
+@testable import Whisp
 
 class UtilityTests: XCTestCase {
     

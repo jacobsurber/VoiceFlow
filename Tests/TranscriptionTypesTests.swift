@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
-@testable import VoiceFlow
+@testable import Whisp
 
 class TranscriptionTypesTests: XCTestCase {
     

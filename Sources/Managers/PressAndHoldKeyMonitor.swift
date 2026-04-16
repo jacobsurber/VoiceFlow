@@ -175,7 +175,7 @@ internal final class PressAndHoldKeyMonitor {
     private var flagsMonitor: Any?
     private var keyDownMonitor: Any?
     private var keyUpMonitor: Any?
-    private let monitorQueue = DispatchQueue(label: "com.voiceflow.pressAndHoldMonitor")
+    private let monitorQueue = DispatchQueue(label: "com.whisp.pressAndHoldMonitor")
     private let checkPermission: PermissionCheck
 
     private var isPressed = false

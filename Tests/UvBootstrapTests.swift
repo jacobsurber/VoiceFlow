@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import VoiceFlow
+@testable import Whisp
 
 final class UvBootstrapTests: XCTestCase {
     private var originalHome: String?
@@ -14,7 +14,7 @@ final class UvBootstrapTests: XCTestCase {
         try super.setUpWithError()
         originalHome = ProcessInfo.processInfo.environment["HOME"]
         originalPath = ProcessInfo.processInfo.environment["PATH"]
-        originalAppSupportOverride = ProcessInfo.processInfo.environment["VOICEFLOW_APP_SUPPORT_DIR"]
+        originalAppSupportOverride = ProcessInfo.processInfo.environment["WHISP_APP_SUPPORT_DIR"]
 
         let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent("UvBootstrapTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
@@ -25,7 +25,7 @@ final class UvBootstrapTests: XCTestCase {
         try FileManager.default.createDirectory(at: tempBin, withIntermediateDirectories: true)
 
         setenv("HOME", tempHome.path, 1)
-        setenv("VOICEFLOW_APP_SUPPORT_DIR", tempAppSupport.path, 1)
+        setenv("WHISP_APP_SUPPORT_DIR", tempAppSupport.path, 1)
         // Keep /usr/bin last so tools like /usr/bin/env remain reachable while excluding any real uv in default paths.
         setenv("PATH", "\(tempBin.path):/usr/bin", 1)
     }
@@ -38,9 +38,9 @@ final class UvBootstrapTests: XCTestCase {
             setenv("PATH", originalPath, 1)
         }
         if let originalAppSupportOverride {
-            setenv("VOICEFLOW_APP_SUPPORT_DIR", originalAppSupportOverride, 1)
+            setenv("WHISP_APP_SUPPORT_DIR", originalAppSupportOverride, 1)
         } else {
-            unsetenv("VOICEFLOW_APP_SUPPORT_DIR")
+            unsetenv("WHISP_APP_SUPPORT_DIR")
         }
         if let tempHome {
             try? FileManager.default.removeItem(at: tempHome)
@@ -63,8 +63,8 @@ final class UvBootstrapTests: XCTestCase {
     }
 
     func testFindUvFallsBackToUserToolsDirectory() throws {
-        // No uv on PATH; add one under Application Support/VoiceFlow/bin/uv
-        let toolsDir = tempAppSupport.appendingPathComponent("VoiceFlow/bin", isDirectory: true)
+        // No uv on PATH; add one under Application Support/Whisp/bin/uv
+        let toolsDir = tempAppSupport.appendingPathComponent("Whisp/bin", isDirectory: true)
         try FileManager.default.createDirectory(at: toolsDir, withIntermediateDirectories: true)
 
         let uvURL = toolsDir.appendingPathComponent("uv")

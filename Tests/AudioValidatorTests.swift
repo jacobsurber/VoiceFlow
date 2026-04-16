@@ -1,6 +1,6 @@
 import XCTest
 import AVFoundation
-@testable import VoiceFlow
+@testable import Whisp
 
 final class AudioValidatorTests: XCTestCase {
     

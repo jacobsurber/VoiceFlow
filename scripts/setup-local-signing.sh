@@ -4,12 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/signing-common.sh"
 
-IDENTITY_NAME="${VOICEFLOW_LOCAL_SIGNING_NAME}"
+IDENTITY_NAME="${WHISP_LOCAL_SIGNING_NAME}"
 KEYCHAIN_PATH="${HOME}/Library/Keychains/login.keychain-db"
 
-existing_line="$(voiceflow_identity_line_for_pattern "$IDENTITY_NAME")"
+existing_line="$(whisp_identity_line_for_pattern "$IDENTITY_NAME")"
 if [ -n "$existing_line" ]; then
-  existing_hash="$(voiceflow_identity_hash_from_line "$existing_line")"
+  existing_hash="$(whisp_identity_hash_from_line "$existing_line")"
   echo "✅ Local signing identity already exists: $IDENTITY_NAME ($existing_hash)"
   exit 0
 fi
@@ -25,10 +25,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-openssl_config="$temp_dir/voiceflow-local-signing.cnf"
-certificate_path="$temp_dir/voiceflow-local-signing.crt"
-private_key_path="$temp_dir/voiceflow-local-signing.key"
-pkcs12_path="$temp_dir/voiceflow-local-signing.p12"
+openssl_config="$temp_dir/whisp-local-signing.cnf"
+certificate_path="$temp_dir/whisp-local-signing.crt"
+private_key_path="$temp_dir/whisp-local-signing.key"
+pkcs12_path="$temp_dir/whisp-local-signing.p12"
 pkcs12_password="$(uuidgen)"
 
 cat >"$openssl_config" <<EOF
@@ -48,7 +48,7 @@ subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid,issuer
 EOF
 
-echo "🔐 Creating local VoiceFlow code-signing identity..."
+echo "🔐 Creating local Whisp code-signing identity..."
 openssl req \
   -newkey rsa:2048 \
   -x509 \
@@ -77,13 +77,13 @@ security add-trusted-cert \
   -k "$KEYCHAIN_PATH" \
   "$certificate_path" >/dev/null
 
-created_line="$(voiceflow_identity_line_for_pattern "$IDENTITY_NAME")"
+created_line="$(whisp_identity_line_for_pattern "$IDENTITY_NAME")"
 if [ -z "$created_line" ]; then
   echo "❌ Created certificate, but macOS did not expose it as a valid code-signing identity"
   echo "   Open Keychain Access and confirm '${IDENTITY_NAME}' is trusted in your login keychain."
   exit 1
 fi
 
-created_hash="$(voiceflow_identity_hash_from_line "$created_line")"
+created_hash="$(whisp_identity_hash_from_line "$created_line")"
 echo "✅ Created local signing identity: $IDENTITY_NAME ($created_hash)"
-echo "💡 Reinstall VoiceFlow with 'make install', then re-grant Microphone and Input Monitoring one last time if macOS already reset them."
+echo "💡 Reinstall Whisp with 'make install', then re-grant Microphone and Input Monitoring one last time if macOS already reset them."

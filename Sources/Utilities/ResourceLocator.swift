@@ -15,7 +15,7 @@ internal enum ResourceLocator {
             return url
         }
 
-        if let resourceBundleURL = Bundle.main.url(forResource: "VoiceFlow_VoiceFlow", withExtension: "bundle"),
+        if let resourceBundleURL = Bundle.main.url(forResource: "Whisp_Whisp", withExtension: "bundle"),
            let resourceBundle = Bundle(url: resourceBundleURL),
            let url = resourceBundle.url(forResource: name, withExtension: ext) {
             return url

@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import VoiceFlow
+@testable import Whisp
 
 final class AppStatusTests: XCTestCase {
     

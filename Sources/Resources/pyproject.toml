@@ -1,7 +1,7 @@
 [project]
-name = "voiceflow-runtime"
+name = "whisp-runtime"
 version = "0.0.0"
-description = "Runtime dependencies for VoiceFlow"
+description = "Runtime dependencies for Whisp"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   # MLX correction

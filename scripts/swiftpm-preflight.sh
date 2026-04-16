@@ -61,7 +61,7 @@ print_swiftpm_toolchain_error() {
 
   echo "❌ Swift Package Manager could not evaluate Package.swift."
   echo ""
-  echo "The active Apple toolchain is failing before VoiceFlow can build."
+  echo "The active Apple toolchain is failing before Whisp can build."
   echo "This machine cannot evaluate this manifest or a brand-new scratch package."
   echo ""
   echo "Active developer directory: $developer_dir"
@@ -88,9 +88,9 @@ print_missing_macro_plugins_error() {
   local developer_dir="$1"
   local missing_plugins="$2"
 
-  echo "❌ VoiceFlow requires Apple Swift macro plugins that are not available in the active toolchain."
+  echo "❌ Whisp requires Apple Swift macro plugins that are not available in the active toolchain."
   echo ""
-  echo "VoiceFlow uses SwiftData, Foundation predicate, and SwiftUI preview macros during compilation."
+  echo "Whisp uses SwiftData, Foundation predicate, and SwiftUI preview macros during compilation."
   echo "The current developer directory can evaluate Package.swift, but it cannot load these plugins:"
   echo "$missing_plugins" | sed 's/^/  - /'
   echo ""

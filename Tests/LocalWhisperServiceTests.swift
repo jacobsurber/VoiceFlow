@@ -2,7 +2,7 @@ import XCTest
 import Foundation
 import AVFoundation
 @preconcurrency import WhisperKit
-@testable import VoiceFlow
+@testable import Whisp
 
 // MARK: - Simple Test Implementation
 class LocalWhisperServiceTests: XCTestCase {

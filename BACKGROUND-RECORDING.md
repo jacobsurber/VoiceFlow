@@ -2,7 +2,7 @@
 
 ## What Changed
 
-VoiceFlow now uses **background-only recording** for press-and-hold capture. This means:
+Whisp now uses **background-only recording** for press-and-hold capture. This means:
 
 ✅ **No window popups** during recording
 ✅ **No focus stealing** - stay in your current app
@@ -42,7 +42,7 @@ VoiceFlow now uses **background-only recording** for press-and-hold capture. Thi
 
 ### Before (Original)
 - Window pops up on start ❌
-- Focus switches to VoiceFlow ❌
+- Focus switches to Whisp ❌
 - Window shows during transcription ❌
 - Must manually switch back ❌
 
@@ -56,7 +56,7 @@ VoiceFlow now uses **background-only recording** for press-and-hold capture. Thi
 
 ### Enable Smart Paste
 For the best experience, enable Smart Paste:
-1. Open VoiceFlow menu bar icon
+1. Open Whisp menu bar icon
 2. Click "Settings..." or "Dashboard..."
 3. Go to **Recording** tab
 4. Enable **"Smart Paste"**
@@ -72,7 +72,7 @@ For completely silent operation:
 ### Recording doesn't start
 - **Check microphone permission**: System Settings → Privacy & Security → Microphone
 - **Check hotkey**: Settings → confirm Left Control is configured
-- **Menu bar icon**: Should be present - if not, relaunch VoiceFlow
+- **Menu bar icon**: Should be present - if not, relaunch Whisp
 
 ### Auto-paste doesn't work
 - **Grant accessibility permission**: Run `make reset-permissions`

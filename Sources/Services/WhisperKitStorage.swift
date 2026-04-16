@@ -4,9 +4,9 @@ internal enum WhisperKitStorage {
     // HubApi expects a Hugging Face base like ~/Documents/huggingface and stores model repos under
     // <base>/models/<owner>/<repo>. Keep probing the accidental older base that already includes
     // /models so downloads created by the earlier regression still resolve and delete correctly.
-    private static let downloadBaseOverrideKey = "VOICEFLOW_WHISPERKIT_DOWNLOAD_BASE"
+    private static let downloadBaseOverrideKey = "WHISP_WHISPERKIT_DOWNLOAD_BASE"
     private static let documentsHubBaseRelativePath = "huggingface"
-    private static let legacyHubBaseRelativePath = "VoiceFlow/huggingface"
+    private static let legacyHubBaseRelativePath = "Whisp/huggingface"
     private static let modelsPathComponent = "models"
     private static let repositoryPath = "argmaxinc/whisperkit-coreml"
 

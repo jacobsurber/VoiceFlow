@@ -6,7 +6,7 @@ import os.log
 internal final class SemanticCorrectionService {
     private let mlxService = MLXCorrectionService()
     private let keychainService: KeychainServiceProtocol
-    private let logger = Logger(subsystem: "com.voiceflow.app", category: "SemanticCorrection")
+    private let logger = Logger(subsystem: "com.whisp.app", category: "SemanticCorrection")
     
     // Chunking configuration for 32k context window
     // 32k tokens ≈ 24k words (0.75 ratio) ≈ 120k chars
@@ -85,7 +85,7 @@ internal final class SemanticCorrectionService {
 
     // MARK: - Cloud (OpenAI)
     private func correctWithOpenAI(text: String, category: CategoryDefinition) async -> String {
-        guard let apiKey = keychainService.getQuietly(service: "VoiceFlow", account: "OpenAI") else {
+        guard let apiKey = keychainService.getQuietly(service: "Whisp", account: "OpenAI") else {
             return text
         }
         let prompt = loadPrompt(for: category)
@@ -133,7 +133,7 @@ internal final class SemanticCorrectionService {
     }
 
     private func correctWithGemini(text: String, category: CategoryDefinition) async -> String {
-        guard let apiKey = keychainService.getQuietly(service: "VoiceFlow", account: "Gemini") else {
+        guard let apiKey = keychainService.getQuietly(service: "Whisp", account: "Gemini") else {
             return text
         }
         let url = "\(geminiBaseURL)/v1beta/models/gemini-2.5-flash-lite:generateContent"
@@ -175,7 +175,7 @@ internal final class SemanticCorrectionService {
     // MARK: - Prompt file helpers
     private func promptsBaseDir() -> URL? {
         return try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("VoiceFlow/prompts", isDirectory: true)
+            .appendingPathComponent("Whisp/prompts", isDirectory: true)
     }
     
     private func loadPrompt(for category: CategoryDefinition) -> String {

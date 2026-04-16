@@ -1,5 +1,5 @@
 import Foundation
-@testable import VoiceFlow
+@testable import Whisp
 
 final class MockSound: SoundPlayable {
     private(set) var playCallCount = 0

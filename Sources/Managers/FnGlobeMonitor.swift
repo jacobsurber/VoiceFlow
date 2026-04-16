@@ -28,19 +28,19 @@ internal enum FnGlobeHotkeyReadiness: String {
     var defaultMessage: String {
         switch self {
         case .requiresAcknowledgement:
-            return "Enable Fn / Globe mode first so VoiceFlow can guide you through setup."
+            return "Enable Fn / Globe mode first so Whisp can guide you through setup."
         case .requiresInputMonitoring:
             return
-                "Grant Input Monitoring, then set Keyboard > Press Globe key to Do Nothing if macOS keeps taking over the key. If VoiceFlow still cannot see Fn after granting access, quit and reopen the app."
+                "Grant Input Monitoring, then set Keyboard > Press Globe key to Do Nothing if macOS keeps taking over the key. If Whisp still cannot see Fn after granting access, quit and reopen the app."
         case .awaitingVerification:
             return
-                "Hold Fn / Globe until VoiceFlow starts recording. If nothing happens, refresh after adjusting Keyboard settings."
+                "Hold Fn / Globe until Whisp starts recording. If nothing happens, refresh after adjusting Keyboard settings."
         case .ready:
             return
-                "VoiceFlow has seen Fn / Globe successfully. You can keep using it as your microphone trigger."
+                "Whisp has seen Fn / Globe successfully. You can keep using it as your microphone trigger."
         case .unavailable:
             return
-                "VoiceFlow could not keep the Fn / Globe listener running. Refresh the setup after checking permissions and keyboard settings."
+                "Whisp could not keep the Fn / Globe listener running. Refresh the setup after checking permissions and keyboard settings."
         }
     }
 
@@ -59,12 +59,12 @@ internal enum FnGlobeHotkeyReadiness: String {
 private enum FnGlobeHotkeyCopy {
     static let acknowledgementSetupMessage = "Enable Fn / Globe mode to finish setup."
     static let inputMonitoringSetupMessage =
-        "Grant Input Monitoring, then set Keyboard > Press Globe key to Do Nothing. If VoiceFlow still cannot capture Fn after granting access, quit and reopen the app."
+        "Grant Input Monitoring, then set Keyboard > Press Globe key to Do Nothing. If Whisp still cannot capture Fn after granting access, quit and reopen the app."
     static let verificationSetupMessage =
-        "Hold Fn / Globe to verify capture. If macOS opens Emoji & Symbols or Dictation, set Keyboard > Press Globe key to Do Nothing and try again. If nothing changes after granting Input Monitoring, quit and reopen VoiceFlow."
+        "Hold Fn / Globe to verify capture. If macOS opens Emoji & Symbols or Dictation, set Keyboard > Press Globe key to Do Nothing and try again. If nothing changes after granting Input Monitoring, quit and reopen Whisp."
     static let recoveredTapMessage =
         "Fn / Globe capture recovered after a system interruption. Try the key again if the last press was missed."
-    static let startupUnavailableMessage = "VoiceFlow could not start Fn / Globe capture on this Mac."
+    static let startupUnavailableMessage = "Whisp could not start Fn / Globe capture on this Mac."
     static let tapDisabledMessage =
         "Fn / Globe capture stopped responding. Reopen settings and refresh permissions."
 }

@@ -1,4 +1,4 @@
-# VoiceFlow
+# Whisp
 
 macOS menu bar app for voice-to-text transcription. Swift 5.9+, macOS 14+.
 
@@ -17,15 +17,15 @@ make build            # Universal binary app bundle
 make build-notarize   # Signed + notarized (requires env vars below)
 make test             # Run tests via scripts/run-tests.sh
 make dmg              # Create DMG for distribution
-make clean            # Remove .build/, VoiceFlow.app, zips, dmgs
+make clean            # Remove .build/, Whisp.app, zips, dmgs
 ```
 
 ### Notarization Env Vars
 
 ```bash
-export VOICEFLOW_APPLE_ID='your-apple-id@example.com'
-export VOICEFLOW_APPLE_PASSWORD='app-specific-password'
-export VOICEFLOW_TEAM_ID='your-team-id'
+export WHISP_APPLE_ID='your-apple-id@example.com'
+export WHISP_APPLE_PASSWORD='app-specific-password'
+export WHISP_TEAM_ID='your-team-id'
 ```
 
 ## Architecture
@@ -101,14 +101,14 @@ Prefer existing dependencies over introducing new ones.
 
 ## Environment
 
-- **Data directory**: `~/Library/Application Support/VoiceFlow/`
-- **Custom correction prompts**: `~/Library/Application Support/VoiceFlow/prompts/*_prompt.txt`
+- **Data directory**: `~/Library/Application Support/Whisp/`
+- **Custom correction prompts**: `~/Library/Application Support/Whisp/prompts/*_prompt.txt`
 - **VERSION file**: Repo root, read by release scripts.
 - **VersionInfo.swift.template**: `Sources/` — build scripts generate `VersionInfo.swift` with git hash.
 
 ## Gotchas
 
-- **Accessibility permission invalidated on every rebuild** (ad-hoc signing). After `make install`: System Settings > Accessibility > remove VoiceFlow > re-add `/Applications/VoiceFlow.app` > toggle ON. SmartPaste silently fails without this.
-- **"Build succeeded" then "Build failed"**: Swift build works but post-build steps fail. Check if `.build/arm64-apple-macosx/release/VoiceFlow` exists; run `scripts/install-voiceflow.sh` manually.
+- **Accessibility permission invalidated on every rebuild** (ad-hoc signing). After `make install`: System Settings > Accessibility > remove Whisp > re-add `/Applications/Whisp.app` > toggle ON. SmartPaste silently fails without this.
+- **"Build succeeded" then "Build failed"**: Swift build works but post-build steps fail. Check if `.build/arm64-apple-macosx/release/Whisp` exists; run `scripts/install-voiceflow.sh` manually.
 - **Safe-to-ignore warnings**: `AddInstanceForFactory: No factory registered...` and `LoudnessManager.mm: unknown value` are Apple framework noise.
-- **Entry point is `AudioWhisperApp.swift`**, not `VoiceFlowApp.swift` (legacy naming from the AudioWhisper fork).
+- **Entry point is `AudioWhisperApp.swift`**, not `WhispApp.swift` (legacy naming from the AudioWhisper fork).

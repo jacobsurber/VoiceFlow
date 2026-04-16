@@ -1,5 +1,5 @@
 import Foundation
-@testable import VoiceFlow
+@testable import Whisp
 
 class MockKeychainService: KeychainServiceProtocol {
     private var storage: [String: String] = [:]

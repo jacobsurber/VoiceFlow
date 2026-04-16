@@ -1,6 +1,6 @@
 import XCTest
 import SwiftData
-@testable import VoiceFlow
+@testable import Whisp
 
 @MainActor
 final class DataManagerTests: XCTestCase {

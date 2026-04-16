@@ -1,6 +1,6 @@
-# Contributing to VoiceFlow
+# Contributing to Whisp
 
-Thank you for your interest in contributing to VoiceFlow! This guide covers development setup, testing, and distribution.
+Thank you for your interest in contributing to Whisp! This guide covers development setup, testing, and distribution.
 
 ## Development Setup
 
@@ -13,8 +13,8 @@ Thank you for your interest in contributing to VoiceFlow! This guide covers deve
 ### Initial Setup
 
 ```bash
-git clone https://github.com/jacobsurber/VoiceFlow.git
-cd VoiceFlow
+git clone https://github.com/amirsalaar/Whisp.git
+cd Whisp
 make setup-local-signing
 swift build
 ```
@@ -55,9 +55,9 @@ Creates a universal binary (Apple Silicon + Intel) app bundle with icon and Info
 ### Signed + Notarized Build
 
 ```bash
-export VOICEFLOW_APPLE_ID='your-apple-id@example.com'
-export VOICEFLOW_APPLE_PASSWORD='app-specific-password'
-export VOICEFLOW_TEAM_ID='your-team-id'
+export WHISP_APPLE_ID='your-apple-id@example.com'
+export WHISP_APPLE_PASSWORD='app-specific-password'
+export WHISP_TEAM_ID='your-team-id'
 make build-notarize
 ```
 
@@ -72,13 +72,13 @@ The build script auto-detects Developer ID certificates from your keychain. To v
 security find-identity -v -p codesigning
 
 # Verify app signature
-codesign --verify --verbose VoiceFlow.app
+codesign --verify --verbose Whisp.app
 
 # Check Gatekeeper approval
-spctl -a -v VoiceFlow.app
+spctl -a -v Whisp.app
 ```
 
-Without a Developer ID, VoiceFlow now prefers any stable local code-signing identity it can find, including a locally generated development identity. If no stable identity exists, the app falls back to ad-hoc signing and macOS privacy permissions can reset after each rebuild.
+Without a Developer ID, Whisp now prefers any stable local code-signing identity it can find, including a locally generated development identity. If no stable identity exists, the app falls back to ad-hoc signing and macOS privacy permissions can reset after each rebuild.
 
 For local development, run `make setup-local-signing` once to generate a persistent self-signed code-signing identity in your login keychain. That keeps Microphone, Accessibility, and Input Monitoring permissions stable across rebuilds.
 
@@ -95,7 +95,7 @@ For local development, run `make setup-local-signing` once to generate a persist
 ### Project Structure
 
 ```
-VoiceFlow/
+Whisp/
 ├── Sources/
 │   ├── App/              # AppDelegate, lifecycle, hotkeys
 │   ├── Managers/         # HotKey, PressAndHold, Paste, Permissions
@@ -136,4 +136,4 @@ These Apple framework warnings are harmless:
 
 ## License
 
-By contributing to VoiceFlow, you agree that your contributions will be licensed under the MIT License.
+By contributing to Whisp, you agree that your contributions will be licensed under the MIT License.

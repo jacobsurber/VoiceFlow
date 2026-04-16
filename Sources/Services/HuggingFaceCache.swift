@@ -2,12 +2,12 @@ import Foundation
 
 internal enum HuggingFaceCache {
     static func homeDirectory(fileManager: FileManager = .default) -> URL {
-        if let override = ProcessInfo.processInfo.environment["VOICEFLOW_HF_HOME"], !override.isEmpty {
+        if let override = ProcessInfo.processInfo.environment["WHISP_HF_HOME"], !override.isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
 
         if let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            return appSupport.appendingPathComponent("VoiceFlow/huggingface-cache", isDirectory: true)
+            return appSupport.appendingPathComponent("Whisp/huggingface-cache", isDirectory: true)
         }
 
         return fileManager.temporaryDirectory.appendingPathComponent("huggingface-cache", isDirectory: true)

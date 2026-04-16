@@ -1,10 +1,10 @@
-# VoiceFlow Test Suite
+# Whisp Test Suite
 
-A comprehensive test suite for the VoiceFlow macOS application covering all major components and functionality.
+A comprehensive test suite for the Whisp macOS application covering all major components and functionality.
 
 ## Overview
 
-This test suite provides thorough coverage of the VoiceFlow application including:
+This test suite provides thorough coverage of the Whisp application including:
 - Audio recording and processing
 - Speech-to-text API integration
 - Settings and preferences management
@@ -185,7 +185,7 @@ override func tearDown() {
 Tests that require API keys use mock keychain service for secure testing:
 ```swift
 let mockKeychain = MockKeychainService()
-mockKeychain.saveQuietly("test-key", service: "VoiceFlow", account: "OpenAI")
+mockKeychain.saveQuietly("test-key", service: "Whisp", account: "OpenAI")
 // Test code
 // Cleanup handled automatically by test teardown
 ```

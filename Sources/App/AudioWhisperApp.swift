@@ -3,7 +3,7 @@ import SwiftData
 import SwiftUI
 
 @main
-internal struct VoiceFlowApp: App {
+internal struct WhispApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
@@ -43,7 +43,7 @@ internal struct VoiceFlowApp: App {
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "Database Initialization Failed"
-                alert.informativeText = "VoiceFlow couldn't initialize its database. Transcription history will be disabled this session.\n\nError: \(error.localizedDescription)"
+                alert.informativeText = "Whisp couldn't initialize its database. Transcription history will be disabled this session.\n\nError: \(error.localizedDescription)"
                 alert.alertStyle = .warning
                 alert.addButton(withTitle: "Continue")
                 alert.runModal()

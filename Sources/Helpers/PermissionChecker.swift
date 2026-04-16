@@ -4,7 +4,7 @@ import os.log
 
 internal class PermissionChecker {
 
-    /// Passive startup check. VoiceFlow no longer triggers system permission dialogs on launch.
+    /// Passive startup check. Whisp no longer triggers system permission dialogs on launch.
     static func checkAndPromptForPermissions() {
         let configuration = PressAndHoldSettings.configuration()
         let needsInputMonitoring = configuration.requiresInputMonitoringPermission(

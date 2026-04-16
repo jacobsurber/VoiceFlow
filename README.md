@@ -1,10 +1,10 @@
-# VoiceFlow
+# Whisp
 
 A lightweight macOS menu bar app for voice-to-text transcription. Press and hold a key, speak, release, and your words appear as text — copied to clipboard and optionally pasted into the active app.
 
 Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local WhisperKit (CoreML), and Parakeet-MLX (Apple Silicon).
 
-> Forked from [mazdak/AudioWhisper](https://github.com/mazdak/AudioWhisper).
+> Forked from [jacobsurber/Whisp](https://github.com/jacobsurber/Whisp), originally [mazdak/AudioWhisper](https://github.com/mazdak/AudioWhisper).
 
 ## Features
 
@@ -26,8 +26,8 @@ Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local Wh
 
 ### Download from Releases
 
-1. Download the latest `.dmg` from [Releases](https://github.com/jacobsurber/VoiceFlow/releases)
-2. Drag VoiceFlow.app to your Applications folder
+1. Download the latest `.dmg` from [Releases](https://github.com/amirsalaar/whisp/releases)
+2. Drag Whisp.app to your Applications folder
 3. Launch and configure through the Dashboard
 
 > **Note:** The app is ad-hoc signed. On first launch, right-click the app and select **Open**, then confirm the dialog. You only need to do this once.
@@ -35,8 +35,8 @@ Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local Wh
 ### Build from Source
 
 ```bash
-git clone https://github.com/jacobsurber/VoiceFlow.git
-cd VoiceFlow
+git clone https://github.com/amirsalaar/whisp.git
+cd whisp
 
 # Optional but recommended for local development builds.
 # Creates a stable signing identity so macOS privacy permissions persist.
@@ -52,7 +52,7 @@ make build
 make dmg
 ```
 
-After installing, grant or enable the permissions VoiceFlow needs for the features you use:
+After installing, grant or enable the permissions Whisp needs for the features you use:
 
 - **Microphone** — requested on first recording
 - **Accessibility** — enable in System Settings for Command/Option/Control press-and-hold and Smart Paste in other apps
@@ -81,7 +81,7 @@ Post-processing to fix transcription errors:
 - **Local MLX** — runs fully offline on Apple Silicon
 - **Cloud** — uses the active cloud provider
 
-App-aware categories (Terminal, Coding, Chat, Writing, Email) customize the correction prompt. Override prompts by placing `*_prompt.txt` files in `~/Library/Application Support/VoiceFlow/prompts/`.
+App-aware categories (Terminal, Coding, Chat, Writing, Email) customize the correction prompt. Override prompts by placing `*_prompt.txt` files in `~/Library/Application Support/Whisp/prompts/`.
 
 ## Usage
 
@@ -112,14 +112,14 @@ Configure the trigger key and mode in Dashboard > Recording.
 For distribution without Gatekeeper warnings, set these environment variables and run `make build-notarize`:
 
 ```bash
-export VOICEFLOW_APPLE_ID='your-apple-id@example.com'
-export VOICEFLOW_APPLE_PASSWORD='app-specific-password'
-export VOICEFLOW_TEAM_ID='your-team-id'
+export WHISP_APPLE_ID='your-apple-id@example.com'
+export WHISP_APPLE_PASSWORD='app-specific-password'
+export WHISP_TEAM_ID='your-team-id'
 ```
 
 ### After Installing a New Build
 
-If VoiceFlow is installed with a stable signature, macOS should preserve its existing Microphone, Accessibility, and Input Monitoring permissions across reinstalls.
+If Whisp is installed with a stable signature, macOS should preserve its existing Microphone, Accessibility, and Input Monitoring permissions across reinstalls.
 
 If you are still using ad-hoc signing, or permissions already became stale from older builds, run:
 
@@ -141,10 +141,10 @@ Then re-grant the affected permissions once in System Settings.
 ## Troubleshooting
 
 **App won't open ("unidentified developer")**
-Right-click > Open > confirm. Or run `xattr -cr /Applications/VoiceFlow.app`.
+Right-click > Open > confirm. Or run `xattr -cr /Applications/Whisp.app`.
 
 **Press & Hold not working**
-Command, Option, and Control require Accessibility permission: System Settings > Privacy & Security > Accessibility > add VoiceFlow.
+Command, Option, and Control require Accessibility permission: System Settings > Privacy & Security > Accessibility > add Whisp.
 
 Fn / Globe requires Input Monitoring and may also require Keyboard > Press Globe key to be set to Do Nothing.
 
@@ -152,7 +152,7 @@ Fn / Globe requires Input Monitoring and may also require Keyboard > Press Globe
 Grant Accessibility permission (same as above). Smart Paste simulates Command+V.
 
 **Microphone not detected**
-System Settings > Privacy & Security > Microphone > enable VoiceFlow.
+System Settings > Privacy & Security > Microphone > enable Whisp.
 
 **Microphone prompt or Fn permission keeps resetting after every rebuild**
 Your development build is likely ad-hoc signed or unsigned. Run `make setup-local-signing`, reinstall with `make install`, then re-grant permissions once.

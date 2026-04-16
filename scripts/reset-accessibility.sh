@@ -1,36 +1,36 @@
 #!/bin/bash
 #
 # reset-accessibility.sh
-# Resets and re-grants VoiceFlow privacy permissions after a rebuild
+# Resets and re-grants Whisp privacy permissions after a rebuild
 #
 
 set -e
 
-BUNDLE_ID="com.voiceflow.app"
-APP_PATH="/Applications/VoiceFlow.app"
+BUNDLE_ID="com.whisp.app"
+APP_PATH="/Applications/Whisp.app"
 
-echo "🔧 VoiceFlow Privacy Permission Reset"
+echo "🔧 Whisp Privacy Permission Reset"
 echo "====================================="
 echo ""
 
 # Check if app exists
 if [ ! -d "$APP_PATH" ]; then
-    echo "❌ VoiceFlow not found at $APP_PATH"
+    echo "❌ Whisp not found at $APP_PATH"
     echo "   Run 'make install' first"
     exit 1
 fi
 
-echo "📍 Found VoiceFlow at: $APP_PATH"
+echo "📍 Found Whisp at: $APP_PATH"
 echo "🆔 Bundle ID: $BUNDLE_ID"
 echo ""
 
-# Step 1: Quit VoiceFlow
-echo "1️⃣  Quitting VoiceFlow..."
-pkill -x VoiceFlow 2>/dev/null && sleep 1 || echo "   (VoiceFlow was not running)"
+# Step 1: Quit Whisp
+echo "1️⃣  Quitting Whisp..."
+pkill -x Whisp 2>/dev/null && sleep 1 || echo "   (Whisp was not running)"
 
 # Step 2: Try to reset TCC database (best effort)
 echo ""
-echo "2️⃣  Attempting to reset VoiceFlow privacy permissions..."
+echo "2️⃣  Attempting to reset Whisp privacy permissions..."
 
 reset_service() {
     local service="$1"
@@ -45,9 +45,9 @@ reset_service Microphone
 reset_service Accessibility
 reset_service ListenEvent
 
-# Step 3: Launch VoiceFlow
+# Step 3: Launch Whisp
 echo ""
-echo "3️⃣  Launching VoiceFlow..."
+echo "3️⃣  Launching Whisp..."
 open "$APP_PATH"
 sleep 2
 
@@ -58,9 +58,9 @@ echo ""
 echo "   • Microphone: try recording once and click Allow"
 echo "   • Accessibility: System Settings → Privacy & Security → Accessibility"
 echo "   • Input Monitoring: System Settings → Privacy & Security → Input Monitoring"
-echo "   • If old VoiceFlow entries remain, remove them before re-adding /Applications/VoiceFlow.app"
+echo "   • If old Whisp entries remain, remove them before re-adding /Applications/Whisp.app"
 echo ""
-echo "5️⃣  Test VoiceFlow:"
+echo "5️⃣  Test Whisp:"
 echo ""
 echo "   • Open Notes or TextEdit"
 echo "   • Click in a text field"

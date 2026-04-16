@@ -163,7 +163,7 @@ internal class AppSetupHelper {
                 in: .userDomainMask,
                 appropriateFor: nil,
                 create: true
-            ).appendingPathComponent("VoiceFlow/prompts", isDirectory: true)
+            ).appendingPathComponent("Whisp/prompts", isDirectory: true)
             if !FileManager.default.fileExists(atPath: base.path) {
                 try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
             }

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# VoiceFlow DMG Creator
+# Whisp DMG Creator
 # Creates a distributable DMG with an Applications symlink
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.." || exit 1
 
 VERSION=$(cat VERSION | tr -d '[:space:]')
-APP_NAME="VoiceFlow"
+APP_NAME="Whisp"
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
 STAGING_DIR=$(mktemp -d)
 

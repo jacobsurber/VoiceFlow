@@ -108,7 +108,7 @@ internal struct DashboardPermissionsView: View {
                     Text("Input Monitoring")
                 } footer: {
                     Text(
-                        "Required for standalone Fn / Globe capture. VoiceFlow keeps Fn selected even if setup fails, so use Refresh after changing permissions or keyboard settings. If the status still does not update after granting access, quit and reopen VoiceFlow."
+                        "Required for standalone Fn / Globe capture. Whisp keeps Fn selected even if setup fails, so use Refresh after changing permissions or keyboard settings. If the status still does not update after granting access, quit and reopen Whisp."
                     )
                 }
             }
@@ -153,7 +153,7 @@ internal struct DashboardPermissionsView: View {
 
         if fnGlobeReadiness == .awaitingVerification {
             return
-                "Hold Fn / Globe until VoiceFlow starts recording. If macOS opens Emoji & Symbols or Dictation, set Keyboard > Press Globe key to Do Nothing and refresh this page."
+                "Hold Fn / Globe until Whisp starts recording. If macOS opens Emoji & Symbols or Dictation, set Keyboard > Press Globe key to Do Nothing and refresh this page."
         }
 
         return nil

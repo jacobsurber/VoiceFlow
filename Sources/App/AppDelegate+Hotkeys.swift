@@ -42,7 +42,7 @@ extension AppDelegate {
         pressAndHoldMonitor = monitor
         if !monitor.start() {
             Logger.app.info(
-                "Press-and-hold monitor not started because Accessibility permission is not granted. VoiceFlow will keep the floating dock available and wait for explicit permission setup."
+                "Press-and-hold monitor not started because Accessibility permission is not granted. Whisp will keep the floating dock available and wait for explicit permission setup."
             )
         }
     }
@@ -278,7 +278,7 @@ extension AppDelegate {
     }
 
     private func currentSourceAppInfo() -> SourceAppInfo {
-        // Get the frontmost app that's not VoiceFlow
+        // Get the frontmost app that's not Whisp
         if let frontmostApp = NSWorkspace.shared.frontmostApplication,
             frontmostApp.bundleIdentifier != Bundle.main.bundleIdentifier
         {
@@ -336,7 +336,7 @@ extension AppDelegate {
 
         var isPulseState = true
 
-        let queue = DispatchQueue(label: "com.voiceflow.animation", qos: .background)
+        let queue = DispatchQueue(label: "com.whisp.animation", qos: .background)
         let timer = DispatchSource.makeTimerSource(queue: queue)
 
         // WhisperFlow-inspired 400ms animation cycle
@@ -388,7 +388,7 @@ extension AppDelegate {
 
         var isPulseState = true
 
-        let queue = DispatchQueue(label: "com.voiceflow.processing-animation", qos: .background)
+        let queue = DispatchQueue(label: "com.whisp.processing-animation", qos: .background)
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now(), repeating: 0.6)
 

@@ -24,7 +24,7 @@ internal final class MLXModelManager {
     var downloadProgress: [String: String] = [:]
     var totalCacheSize: Int64 = 0
 
-    private let logger = Logger(subsystem: "com.voiceflow.app", category: "MLXModelManager")
+    private let logger = Logger(subsystem: "com.whisp.app", category: "MLXModelManager")
     private let cacheDirectory: URL
 
     static var parakeetRepo: String {
