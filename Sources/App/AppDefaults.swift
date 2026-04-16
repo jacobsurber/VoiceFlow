@@ -16,6 +16,7 @@ internal enum AppDefaults {
         static let semanticCorrectionModelRepo = "semanticCorrectionModelRepo"
 
         static let startAtLogin = "startAtLogin"
+        static let floatingMicrophoneDockEnabled = "floatingMicrophoneDockEnabled"
         static let playCompletionSound = "playCompletionSound"
         static let transcriptionHistoryEnabled = "transcriptionHistoryEnabled"
         static let transcriptionRetentionPeriod = "transcriptionRetentionPeriod"
@@ -25,6 +26,9 @@ internal enum AppDefaults {
         static let pressAndHoldEnabled = "pressAndHoldEnabled"
         static let pressAndHoldKeyIdentifier = "pressAndHoldKeyIdentifier"
         static let pressAndHoldMode = "pressAndHoldMode"
+        static let pressAndHoldFnWarningAcknowledged = "pressAndHoldFnWarningAcknowledged"
+        static let pressAndHoldFnReadiness = "pressAndHoldFnReadiness"
+        static let pressAndHoldFnFailureMessage = "pressAndHoldFnFailureMessage"
 
         static let hasCompletedWelcome = "hasCompletedWelcome"
         static let lastWelcomeVersion = "lastWelcomeVersion"
@@ -53,11 +57,12 @@ internal enum AppDefaults {
             Keys.semanticCorrectionModelRepo: defaultSemanticCorrectionModelRepo,
 
             Keys.startAtLogin: true,
+            Keys.floatingMicrophoneDockEnabled: true,
             Keys.playCompletionSound: true,
-            Keys.transcriptionHistoryEnabled: false,
+            Keys.transcriptionHistoryEnabled: true,
             Keys.transcriptionRetentionPeriod: RetentionPeriod.oneMonth.rawValue,
             Keys.maxModelStorageGB: 5.0,
-            Keys.enableSmartPaste: false,
+            Keys.enableSmartPaste: true,
 
             Keys.pressAndHoldEnabled: PressAndHoldConfiguration.defaults.enabled,
             Keys.pressAndHoldKeyIdentifier: PressAndHoldConfiguration.defaults.key.rawValue,
@@ -67,8 +72,7 @@ internal enum AppDefaults {
             Keys.lastWelcomeVersion: "0",
 
             Keys.hasSetupLocalLLM: false,
-            Keys.hasSetupParakeet: false
+            Keys.hasSetupParakeet: false,
         ])
     }
 }
-

@@ -1,5 +1,5 @@
-import AppKit
 import AVFoundation
+import AppKit
 import Observation
 
 internal enum PermissionState {
@@ -9,7 +9,7 @@ internal enum PermissionState {
     case granted
     case denied
     case restricted
-    
+
     var needsRequest: Bool {
         switch self {
         case .unknown, .notRequested:
@@ -18,7 +18,7 @@ internal enum PermissionState {
             return false
         }
     }
-    
+
     var canRetry: Bool {
         switch self {
         case .denied:
@@ -38,9 +38,9 @@ internal class PermissionManager {
     var showRecoveryModal = false
     private let isTestEnvironment: Bool
     private let accessibilityManager = AccessibilityPermissionManager()
-    
+
     private var needsAccessibility: Bool {
-        let enableSmartPaste = UserDefaults.standard.bool(forKey: "enableSmartPaste")
+        let enableSmartPaste = UserDefaults.standard.bool(forKey: AppDefaults.Keys.enableSmartPaste)
         let pressAndHoldEnabled = PressAndHoldSettings.configuration().enabled
         return enableSmartPaste || pressAndHoldEnabled
     }
@@ -52,12 +52,12 @@ internal class PermissionManager {
             return microphonePermissionState == .granted
         }
     }
-    
+
     init() {
         // Detect if running in tests
         isTestEnvironment = NSClassFromString("XCTestCase") != nil
     }
-    
+
     func checkPermissionState() {
         checkMicrophonePermission()
 
@@ -69,7 +69,7 @@ internal class PermissionManager {
             accessibilityPermissionState = .granted
         }
     }
-    
+
     private func checkMicrophonePermission() {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
 
@@ -86,14 +86,14 @@ internal class PermissionManager {
             self.microphonePermissionState = .unknown
         }
     }
-    
+
     private func checkAccessibilityPermission() {
         // Use dedicated AccessibilityPermissionManager for consistent checking
         let trusted = accessibilityManager.checkPermission()
 
         self.accessibilityPermissionState = trusted ? .granted : .notRequested
     }
-    
+
     func requestPermissionWithEducation() {
         let needsMicrophone = microphonePermissionState.needsRequest
         let needsAccessibilityNow = needsAccessibility && accessibilityPermissionState.needsRequest
@@ -107,7 +107,7 @@ internal class PermissionManager {
             showRecoveryModal = true
         }
     }
-    
+
     func proceedWithPermissionRequest() {
         if isTestEnvironment {
             Task { @MainActor in
@@ -126,7 +126,7 @@ internal class PermissionManager {
             }
         }
     }
-    
+
     private func requestMicrophonePermission() {
         if microphonePermissionState.needsRequest {
             microphonePermissionState = .requesting
@@ -138,11 +138,11 @@ internal class PermissionManager {
             }
         }
     }
-    
+
     private func requestAccessibilityPermission() {
         if accessibilityPermissionState.needsRequest {
             accessibilityPermissionState = .requesting
-            
+
             // Use dedicated AccessibilityPermissionManager for proper explanation and handling
             accessibilityManager.requestPermissionWithExplanation { [weak self] granted in
                 Task { @MainActor [weak self] in
@@ -152,7 +152,7 @@ internal class PermissionManager {
             }
         }
     }
-    
+
     private func checkIfAllPermissionsHandled() {
         let hasFailures = microphonePermissionState == .denied || accessibilityPermissionState == .denied
         if hasFailures && !showRecoveryModal {
@@ -162,13 +162,13 @@ internal class PermissionManager {
             }
         }
     }
-    
+
     func openSystemSettings() {
         // Skip actual system settings in test environment
         if isTestEnvironment {
             return
         }
-        
+
         // Open the main Privacy & Security preferences
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") else {
             return

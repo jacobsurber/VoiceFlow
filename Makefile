@@ -1,4 +1,4 @@
-.PHONY: help build build-notarize install test clean reset-permissions release dmg
+.PHONY: help build build-notarize install test clean reset-permissions setup-local-signing release dmg
 
 SCRIPTS := scripts
 
@@ -8,7 +8,8 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  install            - Build and install VoiceFlow to /Applications/ (recommended)"
-	@echo "  reset-permissions  - Reset and re-grant accessibility permission (fixes Smart Paste)"
+	@echo "  setup-local-signing - Create a stable local signing identity for development builds"
+	@echo "  reset-permissions  - Reset and re-grant VoiceFlow privacy permissions"
 	@echo "  build              - Build the release app bundle"
 	@echo "  build-notarize     - Build and notarize the app"
 	@echo "  test               - Run tests"
@@ -23,6 +24,10 @@ install:
 # Reset accessibility permissions (fixes Smart Paste after rebuild)
 reset-permissions:
 	$(SCRIPTS)/reset-accessibility.sh
+
+# Create a persistent local signing identity so privacy permissions survive rebuilds
+setup-local-signing:
+	$(SCRIPTS)/setup-local-signing.sh
 
 # Build the app
 build:

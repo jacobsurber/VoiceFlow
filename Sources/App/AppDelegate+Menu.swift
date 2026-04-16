@@ -1,12 +1,15 @@
 import AppKit
 import os.log
 
-internal extension AppDelegate {
+extension AppDelegate {
     func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: LocalizedStrings.Menu.quit, action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
+        menu.addItem(
+            NSMenuItem(
+                title: LocalizedStrings.Menu.quit, action: #selector(NSApplication.terminate(_:)),
+                keyEquivalent: ""))
         return menu
     }
 
@@ -21,5 +24,7 @@ internal extension AppDelegate {
         if let button = statusItem?.button {
             button.image = AppSetupHelper.createMenuBarIcon()
         }
+
+        FloatingMicrophoneDockManager.shared.refreshPositionIfNeeded()
     }
 }

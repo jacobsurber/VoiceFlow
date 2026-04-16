@@ -1,5 +1,6 @@
-import XCTest
 import AVFoundation
+import XCTest
+
 @testable import VoiceFlow
 
 @MainActor
@@ -38,6 +39,7 @@ final class AudioRecorderTests: XCTestCase {
         var factoryCalled = false
         let recorder = makeRecorder(
             dates: [Date(), Date(), Date()],
+            authorizationStatusProvider: { .denied },
             recorderFactory: { _, _ in
                 factoryCalled = true
                 return MockAVAudioRecorder()
@@ -49,6 +51,69 @@ final class AudioRecorderTests: XCTestCase {
 
         XCTAssertFalse(didStart)
         XCTAssertFalse(factoryCalled, "Recorder factory should not be used without permission")
+        XCTAssertFalse(recorder.isRecording)
+    }
+
+    func testInitDoesNotRequestPermissionPromptWhenStatusUndetermined() {
+        var requestCount = 0
+
+        let recorder = makeRecorder(
+            dates: [],
+            authorizationStatusProvider: { .notDetermined },
+            permissionRequester: { completion in
+                requestCount += 1
+                completion(false)
+            },
+            recorderFactory: { _, _ in MockAVAudioRecorder() }
+        )
+
+        XCTAssertFalse(recorder.hasPermission)
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    func testStartRecordingRequestsPermissionOnFirstUseAndStartsWhenGranted() async {
+        let debounceDate = Date(timeIntervalSince1970: 5_000)
+        let timestampDate = Date(timeIntervalSince1970: 5_003)
+        let sessionDate = Date(timeIntervalSince1970: 5_005)
+        var requestCount = 0
+        var status: AVAuthorizationStatus = .notDetermined
+
+        let recorder = makeRecorder(
+            dates: [debounceDate, timestampDate, sessionDate],
+            authorizationStatusProvider: { status },
+            permissionRequester: { completion in
+                requestCount += 1
+                status = .authorized
+                completion(true)
+            },
+            recorderFactory: { _, _ in MockAVAudioRecorder() }
+        )
+
+        let didStart = await recorder.startRecording()
+
+        XCTAssertTrue(didStart)
+        XCTAssertEqual(requestCount, 1)
+        XCTAssertTrue(recorder.hasPermission)
+        XCTAssertTrue(recorder.isRecording)
+    }
+
+    func testStartRecordingReturnsFalseWhenPermissionRequestIsDenied() async {
+        var requestCount = 0
+        let recorder = makeRecorder(
+            dates: [Date()],
+            authorizationStatusProvider: { .notDetermined },
+            permissionRequester: { completion in
+                requestCount += 1
+                completion(false)
+            },
+            recorderFactory: { _, _ in MockAVAudioRecorder() }
+        )
+
+        let didStart = await recorder.startRecording()
+
+        XCTAssertFalse(didStart)
+        XCTAssertEqual(requestCount, 1)
+        XCTAssertFalse(recorder.hasPermission)
         XCTAssertFalse(recorder.isRecording)
     }
 
@@ -161,12 +226,18 @@ final class AudioRecorderTests: XCTestCase {
 
     private func makeRecorder(
         dates: [Date],
+        authorizationStatusProvider: @escaping () -> AVAuthorizationStatus = { .authorized },
+        permissionRequester: @escaping (@escaping (Bool) -> Void) -> Void = { completion in
+            completion(true)
+        },
         recorderFactory: @escaping (URL, [String: Any]) throws -> AVAudioRecorder
     ) -> AudioRecorder {
         let dateProvider = StubDateProvider(dates: dates)
         return AudioRecorder(
             recorderFactory: recorderFactory,
-            dateProvider: { dateProvider.nextDate() }
+            dateProvider: { dateProvider.nextDate() },
+            authorizationStatusProvider: authorizationStatusProvider,
+            permissionRequester: permissionRequester
         )
     }
 }

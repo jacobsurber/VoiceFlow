@@ -9,7 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.10.2"),
-        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0")
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
     ],
     targets: [
         .executableTarget(
@@ -23,7 +23,7 @@ let package = Package(
                 .copy("ml_daemon.py"),
                 .copy("ml"),
                 // Bundle additional resources like uv binary and lock files
-                .copy("Resources")
+                .copy("Resources"),
             ]
         ),
         .testTarget(
@@ -31,6 +31,6 @@ let package = Package(
             dependencies: ["VoiceFlow"],
             path: "Tests",
             exclude: ["README.md", "test_parakeet_transcribe.py", "__Snapshots__"]
-        )
+        ),
     ]
 )

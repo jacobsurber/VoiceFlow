@@ -1,6 +1,6 @@
-import Foundation
 import AppKit
 import ApplicationServices
+import Foundation
 import os.log
 
 internal enum PressAndHoldMode: String, CaseIterable, Identifiable {
@@ -88,6 +88,18 @@ internal struct PressAndHoldConfiguration: Equatable {
     var key: PressAndHoldKey
     var mode: PressAndHoldMode
 
+    var isFnGlobeEnabled: Bool {
+        enabled && key == .globe
+    }
+
+    var requiresAccessibilityPermission: Bool {
+        enabled && key != .globe
+    }
+
+    func requiresInputMonitoringPermission(warningAcknowledged: Bool) -> Bool {
+        isFnGlobeEnabled && warningAcknowledged
+    }
+
     static let defaults = PressAndHoldConfiguration(
         enabled: true,
         key: .rightCommand,
@@ -96,17 +108,28 @@ internal struct PressAndHoldConfiguration: Equatable {
 }
 
 internal enum PressAndHoldSettings {
-    private static let enabledKey = "pressAndHoldEnabled"
-    private static let keyIdentifierKey = "pressAndHoldKeyIdentifier"
-    private static let modeKey = "pressAndHoldMode"
+    private static let enabledKey = AppDefaults.Keys.pressAndHoldEnabled
+    private static let keyIdentifierKey = AppDefaults.Keys.pressAndHoldKeyIdentifier
+    private static let modeKey = AppDefaults.Keys.pressAndHoldMode
 
     static func configuration(using defaults: UserDefaults = .standard) -> PressAndHoldConfiguration {
-        let enabled = defaults.object(forKey: enabledKey) as? Bool ?? PressAndHoldConfiguration.defaults.enabled
-        let keyIdentifier = defaults.string(forKey: keyIdentifierKey) ?? PressAndHoldConfiguration.defaults.key.rawValue
-        let modeIdentifier = defaults.string(forKey: modeKey) ?? PressAndHoldConfiguration.defaults.mode.rawValue
+        let enabled =
+            defaults.object(forKey: enabledKey) as? Bool ?? PressAndHoldConfiguration.defaults.enabled
+        let keyIdentifier =
+            defaults.string(forKey: keyIdentifierKey) ?? PressAndHoldConfiguration.defaults.key.rawValue
+        let modeIdentifier =
+            defaults.string(forKey: modeKey) ?? PressAndHoldConfiguration.defaults.mode.rawValue
 
-        let key = PressAndHoldKey(rawValue: keyIdentifier) ?? legacyKey(from: keyIdentifier) ?? PressAndHoldConfiguration.defaults.key
+        let key =
+            PressAndHoldKey(rawValue: keyIdentifier) ?? legacyKey(from: keyIdentifier)
+            ?? PressAndHoldConfiguration.defaults.key
         let mode = PressAndHoldMode(rawValue: modeIdentifier) ?? PressAndHoldConfiguration.defaults.mode
+
+        if key == .globe,
+            defaults.object(forKey: AppDefaults.Keys.pressAndHoldFnWarningAcknowledged) == nil
+        {
+            defaults.set(true, forKey: AppDefaults.Keys.pressAndHoldFnWarningAcknowledged)
+        }
 
         return PressAndHoldConfiguration(enabled: enabled, key: key, mode: mode)
     }
@@ -165,7 +188,8 @@ internal final class PressAndHoldKeyMonitor {
         configuration: PressAndHoldConfiguration,
         keyDownHandler: @escaping () -> Void,
         keyUpHandler: (() -> Void)? = nil,
-        addGlobalMonitor: @escaping EventMonitorFactory = NSEvent.addGlobalMonitorForEvents(matching:handler:),
+        addGlobalMonitor: @escaping EventMonitorFactory = NSEvent.addGlobalMonitorForEvents(
+            matching:handler:),
         removeMonitor: @escaping EventMonitorRemoval = NSEvent.removeMonitor(_:),
         checkPermission: @escaping PermissionCheck = { AXIsProcessTrusted() }
     ) {
@@ -183,13 +207,24 @@ internal final class PressAndHoldKeyMonitor {
     func start() -> Bool {
         stop()
 
+        guard configuration.key != .globe else {
+            Logger.app.warning(
+                "Use FnGlobeMonitor for the Globe / Fn trigger instead of the generic press-and-hold monitor."
+            )
+            return false
+        }
+
         if !checkPermission() {
-            Logger.app.warning("Press-and-hold monitor cannot start: Accessibility permission not granted. Global key monitors require Privacy & Security → Accessibility.")
+            Logger.app.warning(
+                "Press-and-hold monitor cannot start: Accessibility permission not granted. Global key monitors require Privacy & Security → Accessibility."
+            )
             return false
         }
 
         let modifierFlag = configuration.key.modifierFlag
-        if modifierFlag == .command || modifierFlag == .option || modifierFlag == .control || modifierFlag == .function {
+        if modifierFlag == .command || modifierFlag == .option || modifierFlag == .control
+            || modifierFlag == .function
+        {
             flagsMonitor = addGlobalMonitor(.flagsChanged) { [weak self] event in
                 self?.handleModifierEvent(event)
             }
@@ -284,10 +319,7 @@ internal final class PressAndHoldKeyMonitor {
             guard let self = self, self.isPressed else { return }
 
             Logger.app.warning("Press-and-hold key stuck for \(stuckStateTimeout)s - auto-releasing")
-
-            self.monitorQueue.async { [weak self] in
-                self?.processTransition(isKeyDownEvent: false)
-            }
+            self.processTransition(isKeyDownEvent: false)
         }
     }
 

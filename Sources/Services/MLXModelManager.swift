@@ -7,7 +7,7 @@ internal struct MLXModel: Identifiable, Equatable {
     let repo: String
     let estimatedSize: String
     let description: String
-    
+
     var displayName: String {
         repo.split(separator: "/").last.map(String.init) ?? repo
     }
@@ -17,21 +17,23 @@ internal struct MLXModel: Identifiable, Equatable {
 @MainActor
 internal final class MLXModelManager {
     static let shared = MLXModelManager()
-    
+
     var downloadedModels: Set<String> = []
     var modelSizes: [String: Int64] = [:]
     var isDownloading: [String: Bool] = [:]
     var downloadProgress: [String: String] = [:]
     var totalCacheSize: Int64 = 0
-    
+
     private let logger = Logger(subsystem: "com.voiceflow.app", category: "MLXModelManager")
     private let cacheDirectory: URL
 
     static var parakeetRepo: String {
-        let rawValue = UserDefaults.standard.string(forKey: "selectedParakeetModel") ?? ParakeetModel.v3Multilingual.rawValue
+        let rawValue =
+            UserDefaults.standard.string(forKey: "selectedParakeetModel")
+            ?? ParakeetModel.v3Multilingual.rawValue
         return rawValue
     }
-    
+
     // Curated list of quality MLX models for semantic correction
     static let recommendedModels = [
         MLXModel(
@@ -53,24 +55,19 @@ internal final class MLXModelManager {
             repo: "mlx-community/Phi-3.5-mini-instruct-4bit",
             estimatedSize: "2.4 GB",
             description: "Premium quality correction"
-        )
+        ),
     ]
-    
-    private init() {
-        // Use Application Support instead of home directory to avoid permission popups
-        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            self.cacheDirectory = appSupport
-                .appendingPathComponent("VoiceFlow/huggingface-cache", isDirectory: true)
-        } else {
-            // Fallback to temp directory if Application Support unavailable
-            self.cacheDirectory = FileManager.default.temporaryDirectory
-                .appendingPathComponent("huggingface-cache", isDirectory: true)
-        }
-        Task {
-            await refreshModelList()
+
+    init(cacheDirectory: URL? = nil, refreshOnInit: Bool = true) {
+        self.cacheDirectory = cacheDirectory ?? HuggingFaceCache.homeDirectory()
+
+        if refreshOnInit {
+            Task {
+                await refreshModelList()
+            }
         }
     }
-    
+
     func refreshModelList() async {
         await MainActor.run {
             self.downloadedModels.removeAll()
@@ -78,25 +75,27 @@ internal final class MLXModelManager {
             self.totalCacheSize = 0
         }
 
-        guard FileManager.default.fileExists(atPath: cacheDirectory.path) else {
+        let hubDirectory = HuggingFaceCache.hubDirectory(rootDirectory: cacheDirectory)
+        guard FileManager.default.fileExists(atPath: hubDirectory.path) else {
             logger.info("Hugging Face cache directory doesn't exist")
             return
         }
 
         // Perform heavy file system operations off the main thread
-        let cacheDir = cacheDirectory
+        let cacheDir = hubDirectory
         let result: [(String, Int64)] = await Task.detached(priority: .utility) {
             var models: [(String, Int64)] = []
 
-            guard let contents = try? FileManager.default.contentsOfDirectory(
-                at: cacheDir,
-                includingPropertiesForKeys: nil
-            ) else {
+            guard
+                let contents = try? FileManager.default.contentsOfDirectory(
+                    at: cacheDir,
+                    includingPropertiesForKeys: nil
+                )
+            else {
                 return models
             }
 
-            for item in contents {
-                guard item.lastPathComponent.hasPrefix("models--") else { continue }
+            for item in contents where item.lastPathComponent.hasPrefix("models--") {
 
                 // Convert directory name back to repo format
                 let modelName = item.lastPathComponent
@@ -104,7 +103,9 @@ internal final class MLXModelManager {
                     .replacingOccurrences(of: "--", with: "/")
 
                 // Check if this looks like an MLX model
-                let mlxKeywords = ["mlx", "qwen", "llama", "phi", "mistral", "gemma", "starcoder", "parakeet"]
+                let mlxKeywords = [
+                    "mlx", "qwen", "llama", "phi", "mistral", "gemma", "starcoder", "parakeet",
+                ]
                 let isLikelyMLX = mlxKeywords.contains { modelName.lowercased().contains($0) }
 
                 if isLikelyMLX {
@@ -130,23 +131,28 @@ internal final class MLXModelManager {
             self.totalCacheSize = totalSize
         }
 
-        logger.info("Found \(self.downloadedModels.count) MLX models, total size: \(self.formatBytes(totalSize))")
+        logger.info(
+            "Found \(self.downloadedModels.count) MLX models, total size: \(self.formatBytes(totalSize))")
     }
 
     // Static version for use in detached tasks (nonisolated for background execution)
     private nonisolated static func calculateDirectorySizeSync(at url: URL) -> Int64 {
         var size: Int64 = 0
 
-        guard let enumerator = FileManager.default.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
-        ) else {
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: url,
+                includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+            )
+        else {
             return 0
         }
 
         for case let fileURL as URL in enumerator {
             do {
-                let resourceValues = try fileURL.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey])
+                let resourceValues = try fileURL.resourceValues(forKeys: [
+                    .totalFileAllocatedSizeKey, .fileAllocatedSizeKey,
+                ])
                 size += Int64(resourceValues.totalFileAllocatedSize ?? resourceValues.fileAllocatedSize ?? 0)
             } catch {
                 continue
@@ -155,7 +161,7 @@ internal final class MLXModelManager {
 
         return size
     }
-    
+
     func downloadModel(_ repo: String) async {
         logger.info("Starting MLX model download for: \(repo)")
         // Ensure managed Python via uv
@@ -174,60 +180,60 @@ internal final class MLXModelManager {
             return
         }
         logger.info("Using managed Python at: \(pythonPath)")
-        
+
         await MainActor.run {
             isDownloading[repo] = true
             downloadProgress[repo] = "Checking Python environment..."
         }
-        
+
         logger.info("Starting download for model: \(repo) with Python: \(pythonPath)")
-        
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: pythonPath)
         let pythonScript = """
-import sys
-import json
-import os
+            import sys
+            import json
+            import os
 
-# Show progress
-os.environ.setdefault('HF_HUB_DISABLE_PROGRESS_BARS', '0')
-os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN'] = '1'
+            # Show progress
+            os.environ.setdefault('HF_HUB_DISABLE_PROGRESS_BARS', '0')
+            os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN'] = '1'
 
-repo = "\(repo)"
+            repo = "\(repo)"
 
-try:
-    print(json.dumps({"status": "downloading", "message": "Downloading model files..."}), flush=True)
-    from huggingface_hub import snapshot_download
-    
-    # Download files only - don't load into memory
-    path = snapshot_download(repo)
-    print(json.dumps({"status": "complete", "message": "Download complete"}), flush=True)
+            try:
+                print(json.dumps({"status": "downloading", "message": "Downloading model files..."}), flush=True)
+                from huggingface_hub import snapshot_download
 
-except ImportError as e:
-    print(json.dumps({"status": "error", "message": f"huggingface_hub not installed: {e}"}), flush=True)
-    sys.exit(1)
-except Exception as e:
-    print(json.dumps({"status": "error", "message": str(e)}), flush=True)
-    sys.exit(1)
-"""
+                # Download files only - don't load into memory
+                path = snapshot_download(repo)
+                print(json.dumps({"status": "complete", "message": "Download complete"}), flush=True)
+
+            except ImportError as e:
+                print(json.dumps({"status": "error", "message": f"huggingface_hub not installed: {e}"}), flush=True)
+                sys.exit(1)
+            except Exception as e:
+                print(json.dumps({"status": "error", "message": str(e)}), flush=True)
+                sys.exit(1)
+            """
         process.arguments = ["-c", pythonScript]
-        
+
         // Inherit environment and set HF_HOME to Application Support cache
         var env = ProcessInfo.processInfo.environment
         env["PYTHONUNBUFFERED"] = "1"
         // Set HuggingFace cache to Application Support instead of home directory
         env["HF_HOME"] = cacheDirectory.path
         process.environment = env
-        
+
         let outputPipe = Pipe()
         let errorPipe = Pipe()
         process.standardOutput = outputPipe
         process.standardError = errorPipe
-        
+
         outputPipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             guard !data.isEmpty else { return }
-            
+
             if let output = String(data: data, encoding: .utf8) {
                 self.logger.info("Python stdout: \(output)")
                 // Process each line separately as JSON might come in multiple lines
@@ -235,15 +241,18 @@ except Exception as e:
                 for line in lines {
                     let lineStr = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
                     if lineStr.isEmpty { continue }
-                    
+
                     Task { @MainActor in
                         // Try to parse as JSON
                         if let jsonData = lineStr.data(using: .utf8),
-                           let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                           let message = json["message"] as? String {
+                            let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                            let message = json["message"] as? String
+                        {
                             self.downloadProgress[repo] = message
                             self.logger.info("Download progress for \(repo): \(message)")
-                        } else if lineStr.contains("Downloading") || lineStr.contains("%") || lineStr.contains("model.safetensors") {
+                        } else if lineStr.contains("Downloading") || lineStr.contains("%")
+                            || lineStr.contains("model.safetensors")
+                        {
                             // Capture raw download progress
                             if let percentRange = lineStr.range(of: #"\d+%"#, options: .regularExpression) {
                                 let percent = String(lineStr[percentRange])
@@ -268,31 +277,26 @@ except Exception as e:
                 }
             }
         }
-        
+
         // Collect all stderr for final error message
         errorPipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             guard !data.isEmpty else { return }
-            
+
             if let error = String(data: data, encoding: .utf8) {
                 // Check if this is actually an error or just progress info
                 let lowerError = error.lowercased()
-                let isRealError = (lowerError.contains("error") || 
-                                  lowerError.contains("exception") || 
-                                  lowerError.contains("failed") ||
-                                  lowerError.contains("traceback") ||
-                                  lowerError.contains("no module") ||
-                                  lowerError.contains("not found")) &&
-                                 !lowerError.contains("process exited with status: 0") // Success message
-                
+                let isRealError =
+                    (lowerError.contains("error") || lowerError.contains("exception")
+                        || lowerError.contains("failed") || lowerError.contains("traceback")
+                        || lowerError.contains("no module") || lowerError.contains("not found"))
+                    && !lowerError.contains("process exited with status: 0")  // Success message
+
                 // Ignore common progress messages that go to stderr
-                let isProgress = error.contains("Fetching") || 
-                               error.contains("Downloading") || 
-                               error.contains("%") ||
-                               error.contains("it/s") ||
-                               error.contains("MB/s") ||
-                               error.contains("GB/s")
-                
+                let isProgress =
+                    error.contains("Fetching") || error.contains("Downloading") || error.contains("%")
+                    || error.contains("it/s") || error.contains("MB/s") || error.contains("GB/s")
+
                 if isRealError && !isProgress {
                     self.logger.error("Python stderr: \(error)")
                     Task { @MainActor in
@@ -306,19 +310,18 @@ except Exception as e:
                 }
             }
         }
-        
+
         do {
             logger.info("Launching Python process...")
             try process.run()
             logger.info("Python process launched, waiting for completion...")
-            
+
             // Wait for process in background
             Task.detached {
                 process.waitUntilExit()
-                
+
                 let exitStatus = process.terminationStatus
-                
-                
+
                 await MainActor.run { [weak self] in
                     self?.isDownloading[repo] = false
                     if exitStatus != 0 {
@@ -326,7 +329,7 @@ except Exception as e:
                     } else {
                         self?.downloadProgress.removeValue(forKey: repo)
                     }
-                    
+
                     if exitStatus == 0 {
                         Task {
                             await self?.refreshModelList()
@@ -357,38 +360,16 @@ except Exception as e:
             }
             return
         }
-        
+
         // Fallback to in-memory check after refresh
         await refreshModelList()
         if downloadedModels.contains(repo) { return }
         await downloadParakeetModel()
     }
-    
+
     /// Direct filesystem check for model cache - avoids race conditions with async refreshModelList
     private nonisolated func isModelCachedOnDisk(repo: String) -> Bool {
-        let escaped = repo.replacingOccurrences(of: "/", with: "--")
-        let cacheDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cache/huggingface/hub/models--\(escaped)")
-        
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: cacheDir.path, isDirectory: &isDir), isDir.boolValue else {
-            return false
-        }
-        
-        // Check for refs/main to confirm download completed
-        let refsMain = cacheDir.appendingPathComponent("refs/main")
-        guard let rev = try? String(contentsOf: refsMain, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-              !rev.isEmpty else {
-            return false
-        }
-        
-        // Check snapshot directory exists
-        let snap = cacheDir.appendingPathComponent("snapshots/\(rev)")
-        guard FileManager.default.fileExists(atPath: snap.path, isDirectory: &isDir), isDir.boolValue else {
-            return false
-        }
-        
-        return true
+        HuggingFaceCache.hasUsableModelSnapshot(for: repo, rootDirectory: cacheDirectory)
     }
 
     func downloadParakeetModel() async {
@@ -418,21 +399,21 @@ except Exception as e:
         let process = Process()
         process.executableURL = URL(fileURLWithPath: pythonPath)
         let pythonScript = """
-import json, sys, traceback, os
+            import json, sys, traceback, os
 
-# Allow downloads; avoid implicit token usage
-os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN'] = '1'
-os.environ.setdefault('HF_HUB_DISABLE_PROGRESS_BARS', '0')
+            # Allow downloads; avoid implicit token usage
+            os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN'] = '1'
+            os.environ.setdefault('HF_HUB_DISABLE_PROGRESS_BARS', '0')
 
-try:
-    from parakeet_mlx import from_pretrained
-    # Trigger download if not cached; load from cache otherwise
-    from_pretrained(\"\(repo)\")
-    print(json.dumps({"status": "complete", "message": "Model ready"}), flush=True)
-except Exception as e:
-    print(json.dumps({"status": "error", "message": str(e)}), flush=True)
-    sys.exit(1)
-"""
+            try:
+                from parakeet_mlx import from_pretrained
+                # Trigger download if not cached; load from cache otherwise
+                from_pretrained(\"\(repo)\")
+                print(json.dumps({"status": "complete", "message": "Model ready"}), flush=True)
+            except Exception as e:
+                print(json.dumps({"status": "error", "message": str(e)}), flush=True)
+                sys.exit(1)
+            """
         process.arguments = ["-c", pythonScript]
 
         // Inherit environment and set HF_HOME to Application Support cache
@@ -451,10 +432,11 @@ except Exception as e:
             let data = handle.availableData
             guard !data.isEmpty else { return }
             if let line = String(data: data, encoding: .utf8),
-               let jsonData = line.trimmingCharacters(in: .whitespacesAndNewlines).data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
-               let message = json["message"],
-               let status = json["status"] {
+                let jsonData = line.trimmingCharacters(in: .whitespacesAndNewlines).data(using: .utf8),
+                let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
+                let message = json["message"],
+                let status = json["status"]
+            {
                 Task { @MainActor in
                     self.downloadProgress[repo] = message
                     if status == "complete" {
@@ -495,7 +477,8 @@ except Exception as e:
                         }
                         self?.logger.info("Successfully downloaded Parakeet model: \(repo)")
                     } else {
-                        self?.logger.error("Failed to download Parakeet model: \(repo) with exit code: \(exitStatus)")
+                        self?.logger.error(
+                            "Failed to download Parakeet model: \(repo) with exit code: \(exitStatus)")
                     }
                 }
             }
@@ -509,9 +492,8 @@ except Exception as e:
     }
 
     func deleteModel(_ repo: String) async {
-        let escapedRepo = repo.replacingOccurrences(of: "/", with: "--")
-        let modelPath = cacheDirectory.appendingPathComponent("models--\(escapedRepo)")
-        
+        let modelPath = HuggingFaceCache.modelDirectory(for: repo, rootDirectory: cacheDirectory)
+
         do {
             try FileManager.default.removeItem(at: modelPath)
             await MainActor.run {
@@ -524,47 +506,55 @@ except Exception as e:
             logger.error("Failed to delete model: \(error.localizedDescription)")
         }
     }
-    
+
     /// Delete all models not in the recommended list
     func cleanupUnusedModels() async {
-        let recommendedRepos = Set(Self.recommendedModels.map { $0.repo })
-        let modelsToDelete = downloadedModels.filter { !recommendedRepos.contains($0) }
-        
+        let modelsToDelete = downloadedModels.filter { !Self.protectedRepos.contains($0) }
+
         for repo in modelsToDelete {
             await deleteModel(repo)
         }
-        
+
         logger.info("Cleaned up \(modelsToDelete.count) unused models")
     }
-    
+
     /// Count of models that are downloaded but not in recommended list
     var unusedModelCount: Int {
-        let recommendedRepos = Set(Self.recommendedModels.map { $0.repo })
-        return downloadedModels.filter { !recommendedRepos.contains($0) }.count
+        downloadedModels.filter { !Self.protectedRepos.contains($0) }.count
     }
-    
+
+    private static var protectedRepos: Set<String> {
+        var repos = Set(recommendedModels.map { $0.repo })
+        repos.insert(parakeetRepo)
+        return repos
+    }
+
     private func calculateDirectorySize(at url: URL) -> Int64 {
         var size: Int64 = 0
-        
-        guard let enumerator = FileManager.default.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
-        ) else {
+
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: url,
+                includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+            )
+        else {
             return 0
         }
-        
+
         for case let fileURL as URL in enumerator {
             do {
-                let resourceValues = try fileURL.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey])
+                let resourceValues = try fileURL.resourceValues(forKeys: [
+                    .totalFileAllocatedSizeKey, .fileAllocatedSizeKey,
+                ])
                 size += Int64(resourceValues.totalFileAllocatedSize ?? resourceValues.fileAllocatedSize ?? 0)
             } catch {
                 continue
             }
         }
-        
+
         return size
     }
-    
+
     func formatBytes(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]

@@ -1,13 +1,15 @@
-import SwiftUI
 import ServiceManagement
+import SwiftUI
 import os.log
 
 internal struct DashboardPreferencesView: View {
-    @AppStorage("startAtLogin") private var startAtLogin = true
+    @AppStorage(AppDefaults.Keys.startAtLogin) private var startAtLogin = true
+    @AppStorage(AppDefaults.Keys.floatingMicrophoneDockEnabled) private var floatingMicrophoneDockEnabled =
+        true
     @AppStorage("autoBoostMicrophoneVolume") private var autoBoostMicrophoneVolume = false
-    @AppStorage("enableSmartPaste") private var enableSmartPaste = true
-    @AppStorage("playCompletionSound") private var playCompletionSound = true
-    @AppStorage("maxModelStorageGB") private var maxModelStorageGB = 5.0
+    @AppStorage(AppDefaults.Keys.enableSmartPaste) private var enableSmartPaste = true
+    @AppStorage(AppDefaults.Keys.playCompletionSound) private var playCompletionSound = true
+    @AppStorage(AppDefaults.Keys.maxModelStorageGB) private var maxModelStorageGB = 5.0
 
     @State private var loginItemError: String?
 
@@ -26,6 +28,15 @@ internal struct DashboardPreferencesView: View {
                 }
                 .onChange(of: startAtLogin) { _, newValue in
                     updateLoginItem(enabled: newValue)
+                }
+
+                Toggle(isOn: $floatingMicrophoneDockEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Floating Microphone Dock")
+                        Text("Keep a non-activating mic dock visible across apps and Spaces.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Toggle(isOn: $autoBoostMicrophoneVolume) {

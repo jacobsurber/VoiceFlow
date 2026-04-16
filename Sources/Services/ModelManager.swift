@@ -1,8 +1,8 @@
 import Foundation
-import WhisperKit
-import UserNotifications
-import os.log
 import Observation
+import UserNotifications
+import WhisperKit
+import os.log
 
 @Observable
 @MainActor
@@ -15,63 +15,65 @@ internal class ModelManager {
     var downloadedModels: Set<WhisperModel> = []
     var downloadEstimates: [WhisperModel: TimeInterval] = [:]
     var lastRefresh: Date = Date()
-    
+
     // FileManager operations are performed directly to avoid Sendable warnings
     private var fileSystemWatcher: DispatchSourceFileSystemObject?
     private var refreshTimer: Timer?
     private var isDeleteInProgress: Set<WhisperModel> = []
-    
+
     init() {
         // Disable automatic file system watching to prevent unwanted re-downloads
-        // setupFileSystemWatching() 
-        
+        // setupFileSystemWatching()
+
         // Only refresh manually when user requests it
         // startPeriodicRefresh()
-        
+
         Task {
             await refreshDownloadedModels()
         }
     }
-    
+
     deinit {
         Task { @MainActor [weak self] in
             self?.fileSystemWatcher?.cancel()
             self?.refreshTimer?.invalidate()
         }
     }
-    
+
     nonisolated func isModelDownloaded(_ model: WhisperModel) async -> Bool {
         // Only check if model files exist on disk - DO NOT initialize WhisperKit
         // as that triggers automatic downloads which users don't want
         return await isModelFileDownloaded(model)
     }
-    
+
     // Check if model files exist in the known WhisperKit storage location
     nonisolated func isModelFileDownloaded(_ model: WhisperModel) async -> Bool {
         WhisperKitStorage.isModelDownloaded(model)
     }
-    
+
     // Helper function to add timeout to async operations
-    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws
+        -> T
+    {
         return try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask {
                 try await operation()
             }
-            
+
             group.addTask {
                 try await Task.sleep(for: .seconds(seconds))
                 throw ModelError.downloadTimeout
             }
-            
+
             guard let result = try await group.next() else {
                 throw ModelError.downloadTimeout
             }
-            
+
             group.cancelAll()
             return result
         }
     }
-    
+
     nonisolated func downloadModel(_ model: WhisperModel) async throws {
         // Check if already downloading and mark as downloading
         let alreadyDownloading = await MainActor.run {
@@ -82,17 +84,17 @@ internal class ModelManager {
             ModelManager.shared.downloadStages[model] = .preparing
             return false
         }
-        
+
         if alreadyDownloading {
             throw ModelError.alreadyDownloading
         }
-        
+
         // Check storage limits
         let requiredSpace = model.estimatedSize
         let currentModelsSize = await getTotalModelsSize()
         let maxStorageGB = UserDefaults.standard.object(forKey: "maxModelStorageGB") as? Double ?? 5.0
         let maxStorageBytes = Int64(maxStorageGB * 1024 * 1024 * 1024)
-        
+
         if currentModelsSize + requiredSpace > maxStorageBytes {
             await MainActor.run {
                 ModelManager.shared.downloadingModels.remove(model)
@@ -100,41 +102,50 @@ internal class ModelManager {
             }
             throw ModelError.storageLimitExceeded
         }
-        
+
         // Check available disk space
         let availableSpace = try await getAvailableStorageSpace()
-        if availableSpace < requiredSpace + (100 * 1024 * 1024) { // Add 100MB buffer
+        if availableSpace < requiredSpace + (100 * 1024 * 1024) {  // Add 100MB buffer
             await MainActor.run {
                 ModelManager.shared.downloadingModels.remove(model)
                 ModelManager.shared.downloadStages.removeValue(forKey: model)
             }
             throw ModelError.insufficientStorage
         }
-        
+
         do {
             // Update stage to downloading
             await MainActor.run {
                 ModelManager.shared.downloadStages[model] = .downloading
                 ModelManager.shared.downloadEstimates[model] = estimateDownloadTime(for: model)
             }
-            
-            let config = WhisperKitConfig(model: model.whisperKitModelName)
-            
+
+            WhisperKitStorage.ensureBaseDirectoryExists()
+
+            let config = WhisperKitConfig(
+                model: model.whisperKitModelName,
+                downloadBase: WhisperKitStorage.downloadBaseDirectory()
+            )
+
             // Update stage to processing
             await MainActor.run {
                 ModelManager.shared.downloadStages[model] = .processing
             }
-            
+
             _ = try await WhisperKit(config)
-            
+
+            guard await waitForDownloadedModel(model) else {
+                throw ModelError.downloadFailed
+            }
+
             // Update stage to completing
             await MainActor.run {
                 ModelManager.shared.downloadStages[model] = .completing
             }
-            
+
             // Brief delay to show completion stage
-            try await Task.sleep(for: .milliseconds(500)) // 0.5 seconds
-            
+            try await Task.sleep(for: .milliseconds(500))  // 0.5 seconds
+
             // Clean up download state on success
             await MainActor.run {
                 ModelManager.shared.downloadingModels.remove(model)
@@ -143,15 +154,15 @@ internal class ModelManager {
                 ModelManager.shared.downloadEstimates.removeValue(forKey: model)
                 ModelManager.shared.downloadedModels.insert(model)
             }
-            
+
             // Clear the ready stage after a moment
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 ModelManager.shared.downloadStages.removeValue(forKey: model)
             }
-            
+
             // Send system notification
             await sendDownloadCompletionNotification(for: model)
-            
+
         } catch {
             // Clean up download state on error
             await MainActor.run {
@@ -159,81 +170,78 @@ internal class ModelManager {
                 ModelManager.shared.downloadProgress.removeValue(forKey: model)
                 ModelManager.shared.downloadStages[model] = .failed(error.localizedDescription)
                 ModelManager.shared.downloadEstimates.removeValue(forKey: model)
+                ModelManager.shared.downloadedModels.remove(model)
             }
-            
+
             // Clear the error stage after a moment
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
                 ModelManager.shared.downloadStages.removeValue(forKey: model)
             }
-            
+
             throw error
         }
     }
-    
+
     @MainActor
     private func updateDownloadProgress(_ model: WhisperModel, progress: Double) {
         downloadProgress[model] = progress
     }
-    
+
     nonisolated func deleteModel(_ model: WhisperModel) async throws {
-        // Find the model directory and delete it
-        guard let modelPath = WhisperKitStorage.modelDirectory(for: model) else {
-            throw ModelError.applicationSupportDirectoryNotFound
-        }
-        
+        let modelPaths = WhisperKitStorage.existingModelDirectories(for: model)
+
         // Mark as delete in progress to prevent re-download
         _ = await MainActor.run {
             isDeleteInProgress.insert(model)
         }
-        
-        // Check if the model directory exists
-        if FileManager.default.fileExists(atPath: modelPath.path) {
-            do {
-                try FileManager.default.removeItem(at: modelPath)
-                
-                // Clear the model from LocalWhisperService cache
-                await LocalWhisperService.shared.clearCache()
-                
-                // Update our tracking immediately
-                await MainActor.run {
-                    downloadedModels.remove(model)
-                    isDeleteInProgress.remove(model)
-                }
-                
-            } catch {
-                _ = await MainActor.run {
-                    isDeleteInProgress.remove(model)
-                }
-                throw ModelError.deletionFailed
-            }
-        } else {
+
+        guard !modelPaths.isEmpty else {
             // Update our tracking since it's not actually there
             await MainActor.run {
                 downloadedModels.remove(model)
                 isDeleteInProgress.remove(model)
             }
+            return
+        }
+
+        do {
+            for modelPath in modelPaths {
+                try FileManager.default.removeItem(at: modelPath)
+            }
+
+            // Clear the model from LocalWhisperService cache
+            await LocalWhisperService.shared.clearCache()
+
+            // Update our tracking immediately
+            await MainActor.run {
+                downloadedModels.remove(model)
+                isDeleteInProgress.remove(model)
+            }
+        } catch {
+            _ = await MainActor.run {
+                isDeleteInProgress.remove(model)
+            }
+            throw ModelError.deletionFailed
         }
     }
-    
+
     // Check if model can be deleted
     nonisolated func canDeleteModel(_ model: WhisperModel) -> Bool {
         // Models can be deleted by removing their directories
         return true
     }
-    
+
     nonisolated func getDownloadedModels() async -> [WhisperModel] {
         // Check which models can be successfully initialized
         var downloadedModels: [WhisperModel] = []
-        
-        for model in WhisperModel.allCases {
-            if await isModelDownloaded(model) {
-                downloadedModels.append(model)
-            }
+
+        for model in WhisperModel.allCases where await isModelDownloaded(model) {
+            downloadedModels.append(model)
         }
-        
+
         return downloadedModels
     }
-    
+
     nonisolated func getTotalModelsSize() async -> Int64 {
         // WhisperKit manages model storage internally
         // We can't easily determine the size without access to the internal storage
@@ -243,38 +251,38 @@ internal class ModelManager {
             total + model.estimatedSize
         }
     }
-    
+
     // MARK: - Enhanced Model Management Methods
-    
+
     private func setupFileSystemWatching() {
         WhisperKitStorage.ensureBaseDirectoryExists()
         guard let whisperKitPath = WhisperKitStorage.storageDirectory() else { return }
-        
+
         // Create directory if it doesn't exist
         try? FileManager.default.createDirectory(at: whisperKitPath, withIntermediateDirectories: true)
-        
+
         let descriptor = open(whisperKitPath.path, O_EVTONLY)
         guard descriptor >= 0 else { return }
-        
+
         fileSystemWatcher = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor,
             eventMask: [.write, .delete, .rename],
             queue: DispatchQueue.global(qos: .utility)
         )
-        
+
         fileSystemWatcher?.setEventHandler { [weak self] in
             Task { @MainActor in
                 await self?.refreshDownloadedModels()
             }
         }
-        
+
         fileSystemWatcher?.setCancelHandler {
             close(descriptor)
         }
-        
+
         fileSystemWatcher?.resume()
     }
-    
+
     private func startPeriodicRefresh() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -282,46 +290,63 @@ internal class ModelManager {
             }
         }
     }
-    
+
     @MainActor
     private func refreshDownloadedModels() async {
         var newDownloadedModels: Set<WhisperModel> = []
-        
-        for model in WhisperModel.allCases {
-            if await isModelDownloaded(model) {
-                newDownloadedModels.insert(model)
-            }
+
+        for model in WhisperModel.allCases where await isModelDownloaded(model) {
+            newDownloadedModels.insert(model)
         }
-        
+
         // Only update if there are changes to avoid unnecessary UI updates
         if newDownloadedModels != downloadedModels {
             downloadedModels = newDownloadedModels
             lastRefresh = Date()
         }
     }
-    
+
     private nonisolated func estimateDownloadTime(for model: WhisperModel) -> TimeInterval {
         // Estimate based on model size and typical download speeds
         let sizeInMB = Double(model.estimatedSize) / (1024 * 1024)
-        
+
         // Assume average download speed of 10 MB/s (conservative estimate)
         let estimatedSeconds = sizeInMB / 10.0
-        
+
         // Add processing time based on model size
-        let processingTime = sizeInMB / 50.0 // Rough estimate for model processing
-        
+        let processingTime = sizeInMB / 50.0  // Rough estimate for model processing
+
         return estimatedSeconds + processingTime
     }
-    
+
+    private nonisolated func waitForDownloadedModel(
+        _ model: WhisperModel,
+        timeout: Duration = .seconds(10)
+    ) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+
+        while ContinuousClock.now < deadline {
+            if WhisperKitStorage.isModelDownloaded(model) {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+
+        return WhisperKitStorage.isModelDownloaded(model)
+    }
+
     private nonisolated func getAvailableStorageSpace() async throws -> Int64 {
-        guard let appSupportPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+        guard let downloadBasePath = WhisperKitStorage.downloadBaseDirectory() else {
             throw ModelError.applicationSupportDirectoryNotFound
         }
 
-        let resourceValues = try appSupportPath.resourceValues(forKeys: [.volumeAvailableCapacityKey])
+        try FileManager.default.createDirectory(at: downloadBasePath, withIntermediateDirectories: true)
+
+        let resourceValues = try downloadBasePath.resourceValues(forKeys: [.volumeAvailableCapacityKey])
         return Int64(resourceValues.volumeAvailableCapacity ?? 0)
     }
-    
+
     private nonisolated func sendDownloadCompletionNotification(for model: WhisperModel) async {
         // Check if notifications are available (only works in proper app bundles)
         guard Bundle.main.bundleIdentifier != nil else {
@@ -347,23 +372,23 @@ internal class ModelManager {
             print("Failed to send notification: \(error.localizedDescription)")
         }
     }
-    
+
     @MainActor
     func refreshModelStates() async {
         await refreshDownloadedModels()
     }
-    
+
     nonisolated func isModelReady(_ model: WhisperModel) -> Bool {
         return MainActor.assumeIsolated {
             downloadedModels.contains(model) && !downloadingModels.contains(model)
         }
     }
-    
+
     @MainActor
     func getDownloadStage(for model: WhisperModel) -> DownloadStage? {
         return downloadStages[model]
     }
-    
+
     @MainActor
     func getEstimatedTimeRemaining(for model: WhisperModel) -> TimeInterval? {
         return downloadEstimates[model]
@@ -377,7 +402,7 @@ internal enum DownloadStage: Equatable {
     case completing
     case ready
     case failed(String)
-    
+
     var displayText: String {
         switch self {
         case .preparing: return "Preparing download..."
@@ -388,7 +413,7 @@ internal enum DownloadStage: Equatable {
         case .failed(let error): return "Failed: \(error)"
         }
     }
-    
+
     var isActive: Bool {
         switch self {
         case .preparing, .downloading, .processing, .completing: return true
@@ -407,7 +432,7 @@ internal enum ModelError: LocalizedError {
     case downloadTimeout
     case insufficientStorage
     case storageLimitExceeded
-    
+
     var errorDescription: String? {
         switch self {
         case .alreadyDownloading:
@@ -432,17 +457,17 @@ internal enum ModelError: LocalizedError {
     }
 }
 
-internal extension WhisperModel {
+extension WhisperModel {
     var estimatedSize: Int64 {
         switch self {
         case .tiny:
-            return 39 * 1024 * 1024 // 39MB
+            return 39 * 1024 * 1024  // 39MB
         case .base:
-            return 142 * 1024 * 1024 // 142MB
+            return 142 * 1024 * 1024  // 142MB
         case .small:
-            return 466 * 1024 * 1024 // 466MB
+            return 466 * 1024 * 1024  // 466MB
         case .largeTurbo:
-            return 1536 * 1024 * 1024 // 1.5GB
+            return 1536 * 1024 * 1024  // 1.5GB
         }
     }
 }

@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 
 // MARK: - Dashboard Theme
 internal enum DashboardTheme {
@@ -80,6 +80,7 @@ internal enum DashboardTheme {
 internal enum DashboardNavItem: String, CaseIterable, Identifiable, Hashable {
     case providers = "Transcription"
     case recording = "Hotkeys"
+    case history = "History"
     case preferences = "General"
     case permissions = "Permissions"
 
@@ -89,6 +90,7 @@ internal enum DashboardNavItem: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .providers: return "waveform.circle"
         case .recording: return "keyboard"
+        case .history: return "clock.arrow.circlepath"
         case .preferences: return "gearshape"
         case .permissions: return "lock.shield"
         }
@@ -98,6 +100,7 @@ internal enum DashboardNavItem: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .providers: return "Transcription provider and model settings"
         case .recording: return "Configure keyboard shortcuts"
+        case .history: return "Browse past transcriptions"
         case .preferences: return "App behavior and preferences"
         case .permissions: return "Required system permissions"
         }
@@ -176,6 +179,8 @@ internal struct DashboardView: View {
             DashboardProvidersView()
         case .recording:
             DashboardRecordingView()
+        case .history:
+            DashboardHistoryView()
         case .preferences:
             DashboardPreferencesView()
         case .permissions:
@@ -187,6 +192,7 @@ internal struct DashboardView: View {
 // MARK: - Preview
 #Preview("Dashboard") {
     DashboardView()
-        .frame(width: LayoutMetrics.DashboardWindow.previewSize.width,
-               height: LayoutMetrics.DashboardWindow.previewSize.height)
+        .frame(
+            width: LayoutMetrics.DashboardWindow.previewSize.width,
+            height: LayoutMetrics.DashboardWindow.previewSize.height)
 }

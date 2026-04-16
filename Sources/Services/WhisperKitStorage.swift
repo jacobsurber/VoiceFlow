@@ -1,44 +1,231 @@
 import Foundation
 
 internal enum WhisperKitStorage {
-    // WhisperKit downloads CoreML bundles into a model folder. During download, the folder may exist with
-    // partial contents, so "is downloaded" checks for the three required CoreML bundles with sentinel files.
-    // WhisperKit automatically downloads tokenizers from HuggingFace Hub if not present locally.
+    // HubApi expects a Hugging Face base like ~/Documents/huggingface and stores model repos under
+    // <base>/models/<owner>/<repo>. Keep probing the accidental older base that already includes
+    // /models so downloads created by the earlier regression still resolve and delete correctly.
+    private static let downloadBaseOverrideKey = "VOICEFLOW_WHISPERKIT_DOWNLOAD_BASE"
+    private static let documentsHubBaseRelativePath = "huggingface"
+    private static let legacyHubBaseRelativePath = "VoiceFlow/huggingface"
+    private static let modelsPathComponent = "models"
+    private static let repositoryPath = "argmaxinc/whisperkit-coreml"
+
+    // During download, the folder may exist with partial contents, so "is downloaded" checks for the
+    // three required CoreML bundles with sentinel files. WhisperKit automatically downloads tokenizers
+    // from HuggingFace Hub if not present locally.
     private static let requiredCoreMLBundles = [
         "AudioEncoder.mlmodelc",
         "MelSpectrogram.mlmodelc",
         "TextDecoder.mlmodelc",
     ]
 
-    private static func baseDirectory(fileManager: FileManager = .default) -> URL? {
-        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("VoiceFlow/huggingface/models/argmaxinc/whisperkit-coreml", isDirectory: true)
+    static func downloadBaseDirectory(
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        if let override = downloadBaseOverride(), !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+
+        return preferredDownloadBases(
+            documentsDirectory: documentsDirectory,
+            applicationSupportDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        ).first
     }
 
-    static func storageDirectory(fileManager: FileManager = .default) -> URL? {
-        baseDirectory(fileManager: fileManager)
+    static func storageDirectory(
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        let repoRoots = candidateRepositoryRoots(
+            documentsDirectory: documentsDirectory,
+            applicationSupportDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        )
+
+        return repoRoots.first { repositoryRootContainsInstalledModels($0, fileManager: fileManager) }
+            ?? repoRoots.first { directoryExists($0, fileManager: fileManager) }
+            ?? repoRoots.first
     }
 
-    static func modelDirectory(for model: WhisperModel, fileManager: FileManager = .default) -> URL? {
-        baseDirectory(fileManager: fileManager)?
-            .appendingPathComponent(model.whisperKitModelName, isDirectory: true)
+    static func modelDirectory(
+        for model: WhisperModel,
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        let candidates = candidateRepositoryRoots(
+            documentsDirectory: documentsDirectory,
+            applicationSupportDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        ).map { $0.appendingPathComponent(model.whisperKitModelName, isDirectory: true) }
+
+        if let completeDirectory = candidates.first(where: {
+            isCompleteModelDirectory($0, fileManager: fileManager)
+        }) {
+            return completeDirectory
+        }
+
+        return candidates.first { directoryExists($0, fileManager: fileManager) } ?? candidates.first
     }
 
-    static func isModelDownloaded(_ model: WhisperModel, fileManager: FileManager = .default) -> Bool {
-        guard let modelDirectory = modelDirectory(for: model, fileManager: fileManager) else { return false }
+    static func existingModelDirectories(
+        for model: WhisperModel,
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        candidateRepositoryRoots(
+            documentsDirectory: documentsDirectory,
+            applicationSupportDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        ).map { $0.appendingPathComponent(model.whisperKitModelName, isDirectory: true) }
+            .filter { directoryExists($0, fileManager: fileManager) }
+    }
 
+    static func isModelDownloaded(
+        _ model: WhisperModel,
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        let existingDirectories = existingModelDirectories(
+            for: model,
+            documentsDirectory: documentsDirectory,
+            applicationSupportDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        )
+
+        return existingDirectories.contains { isCompleteModelDirectory($0, fileManager: fileManager) }
+    }
+
+    static func localModelPath(
+        for model: WhisperModel,
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> String? {
+        guard
+            isModelDownloaded(
+                model,
+                documentsDirectory: documentsDirectory,
+                applicationSupportDirectory: applicationSupportDirectory,
+                fileManager: fileManager
+            ),
+            let url = modelDirectory(
+                for: model,
+                documentsDirectory: documentsDirectory,
+                applicationSupportDirectory: applicationSupportDirectory,
+                fileManager: fileManager
+            )
+        else {
+            return nil
+        }
+        return url.path
+    }
+
+    static func ensureBaseDirectoryExists(fileManager: FileManager = .default) {
+        guard let baseDirectory = downloadBaseDirectory(fileManager: fileManager) else { return }
+        try? fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+    }
+
+    private static func preferredDownloadBases(
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        if let override = downloadBaseOverride(), !override.isEmpty {
+            return [URL(fileURLWithPath: override, isDirectory: true)]
+        }
+
+        let documentsBase =
+            (documentsDirectory
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first)?
+            .appendingPathComponent(documentsHubBaseRelativePath, isDirectory: true)
+        let legacyBase =
+            (applicationSupportDirectory
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first)?
+            .appendingPathComponent(legacyHubBaseRelativePath, isDirectory: true)
+
+        return [documentsBase, legacyBase].compactMap { $0 }
+    }
+
+    private static func candidateDownloadBases(
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        let preferredBases = preferredDownloadBases(
+            documentsDirectory: documentsDirectory,
+            applicationSupportDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        )
+
+        var candidates: [URL] = []
+        for base in preferredBases {
+            candidates.append(base)
+            candidates.append(base.appendingPathComponent(modelsPathComponent, isDirectory: true))
+        }
+
+        return uniqueURLs(candidates)
+    }
+
+    private static func candidateRepositoryRoots(
+        documentsDirectory: URL? = nil,
+        applicationSupportDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        candidateDownloadBases(
+            documentsDirectory: documentsDirectory,
+            applicationSupportDirectory: applicationSupportDirectory,
+            fileManager: fileManager
+        ).map { repositoryRoot(forDownloadBase: $0) }
+    }
+
+    private static func repositoryRoot(forDownloadBase baseDirectory: URL) -> URL {
+        baseDirectory
+            .appendingPathComponent(modelsPathComponent, isDirectory: true)
+            .appendingPathComponent(repositoryPath, isDirectory: true)
+    }
+
+    private static func directoryExists(_ url: URL, fileManager: FileManager) -> Bool {
         var isDirectory: ObjCBool = false
-        let exists = fileManager.fileExists(atPath: modelDirectory.path, isDirectory: &isDirectory)
-        guard exists, isDirectory.boolValue else { return false }
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
 
-        // Only check for the three required CoreML bundles with sentinel files.
-        // WhisperKit automatically handles tokenizer downloads from HuggingFace Hub if not found locally,
-        // and can infer config from the CoreML models themselves.
+    private static func repositoryRootContainsInstalledModels(_ url: URL, fileManager: FileManager) -> Bool {
+        guard directoryExists(url, fileManager: fileManager) else { return false }
+
+        guard
+            let children = try? fileManager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return false
+        }
+
+        return children.contains { child in
+            guard let isDirectory = try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory else {
+                return false
+            }
+            return isDirectory == true
+        }
+    }
+
+    private static func isCompleteModelDirectory(_ url: URL, fileManager: FileManager) -> Bool {
+        guard directoryExists(url, fileManager: fileManager) else { return false }
+
         for bundle in requiredCoreMLBundles {
-            let bundleURL = modelDirectory.appendingPathComponent(bundle, isDirectory: true)
+            let bundleURL = url.appendingPathComponent(bundle, isDirectory: true)
             var isBundleDir: ObjCBool = false
             guard fileManager.fileExists(atPath: bundleURL.path, isDirectory: &isBundleDir),
-                  isBundleDir.boolValue else {
+                isBundleDir.boolValue
+            else {
                 return false
             }
 
@@ -51,16 +238,17 @@ internal enum WhisperKitStorage {
         return true
     }
 
-    static func localModelPath(for model: WhisperModel, fileManager: FileManager = .default) -> String? {
-        guard isModelDownloaded(model, fileManager: fileManager),
-              let url = modelDirectory(for: model, fileManager: fileManager) else {
-            return nil
+    private static func downloadBaseOverride() -> String? {
+        downloadBaseOverrideKey.withCString { keyPointer in
+            guard let valuePointer = getenv(keyPointer), valuePointer.pointee != 0 else {
+                return nil
+            }
+            return String(cString: valuePointer)
         }
-        return url.path
     }
 
-    static func ensureBaseDirectoryExists(fileManager: FileManager = .default) {
-        guard let baseDirectory = baseDirectory(fileManager: fileManager) else { return }
-        try? fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+    private static func uniqueURLs(_ urls: [URL]) -> [URL] {
+        var seen = Set<String>()
+        return urls.filter { seen.insert($0.path).inserted }
     }
 }

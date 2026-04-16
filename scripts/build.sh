@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # VoiceFlow Release Build Script
 # For development, use: swift build && swift run
@@ -7,6 +8,10 @@
 # Change to repo root (parent of scripts/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.." || exit 1
+
+source "$SCRIPT_DIR/swiftpm-preflight.sh"
+ensure_swiftpm_manifest_is_healthy "$PWD" || exit 1
+source "$SCRIPT_DIR/signing-common.sh"
 
 # Parse command line arguments
 NOTARIZE=false
@@ -68,7 +73,7 @@ struct VersionInfo {
     static let version = "$VERSION"
     static let gitHash = "$GIT_HASH"
     static let buildDate = "$BUILD_DATE"
-    
+
     static var displayVersion: String {
         if gitHash != "unknown" && !gitHash.isEmpty {
             let shortHash = String(gitHash.prefix(7))
@@ -76,7 +81,7 @@ struct VersionInfo {
         }
         return version
     }
-    
+
     static var fullVersionInfo: String {
         var info = "VoiceFlow \(version)"
         if gitHash != "unknown" && !gitHash.isEmpty {
@@ -256,57 +261,35 @@ cat >VoiceFlow.entitlements <<'EOF'
 </plist>
 EOF
 
-# Function to sign the app with a given identity
-sign_app() {
-  local identity="$1"
-  local identity_name="$2"
-
-  if [ -n "$identity_name" ]; then
-    echo "🔏 Code signing app with: $identity_name ($identity)"
-  else
-    echo "🔏 Code signing app with: $identity"
-  fi
-
-  # Sign uv binary if present (nested executable)
-  if [ -f "VoiceFlow.app/Contents/Resources/bin/uv" ]; then
-    codesign --force --sign "$identity" --options runtime --entitlements VoiceFlow.entitlements VoiceFlow.app/Contents/Resources/bin/uv
-  fi
-
-  codesign --force --deep --sign "$identity" --options runtime --entitlements VoiceFlow.entitlements VoiceFlow.app
-  if [ $? -eq 0 ]; then
-    echo "🔍 Verifying signature..."
-    codesign --verify --verbose VoiceFlow.app
-    echo "✅ App signed successfully"
-    return 0
-  else
-    echo "❌ Code signing failed"
-    return 1
-  fi
-}
-
-# Optional: Code sign the app (requires Apple Developer account)
-SIGNING_IDENTITY=""
-SIGNING_NAME=""
-
-if [ -n "$CODE_SIGN_IDENTITY" ]; then
-  SIGNING_IDENTITY="$CODE_SIGN_IDENTITY"
-else
-  # Try to auto-detect Developer ID (use the first one found)
-  DETECTED_HASH=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk '{print $2}')
-  DETECTED_NAME=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk '{print $3}' | tr -d '"')
-  if [ -n "$DETECTED_HASH" ]; then
-    echo "🔍 Auto-detected signing identity: $DETECTED_NAME"
-    SIGNING_IDENTITY="$DETECTED_HASH"
-    SIGNING_NAME="$DETECTED_NAME"
-  fi
-fi
+# Code sign the app. Prefer a stable identity so macOS privacy permissions persist across rebuilds.
+SIGNING_IDENTITY="$(voiceflow_detect_signing_identity || true)"
+SIGNING_NAME="$(voiceflow_detect_signing_identity_name || true)"
 
 if [ -n "$SIGNING_IDENTITY" ]; then
-  sign_app "$SIGNING_IDENTITY" "$SIGNING_NAME"
+  if [ -n "$SIGNING_NAME" ]; then
+    echo "🔍 Using signing identity: $SIGNING_NAME"
+  fi
+
+  echo "🔏 Code signing app with stable identity..."
+  voiceflow_sign_app_bundle \
+    "VoiceFlow.app" \
+    "VoiceFlow.entitlements" \
+    "VoiceFlow.app/Contents/Resources/bin/uv" \
+    "$SIGNING_IDENTITY"
 else
-  echo "💡 No Developer ID found. App will be unsigned."
-  echo "💡 To sign the app, get a Developer ID certificate from Apple Developer Portal."
+  echo "⚠️  No stable signing identity found. Falling back to ad-hoc signing."
+  echo "⚠️  macOS may re-prompt for Microphone, Accessibility, and Input Monitoring after each rebuild."
+  echo "💡 Run 'make setup-local-signing' once to create a persistent local signing identity for development."
+
+  voiceflow_sign_app_bundle \
+    "VoiceFlow.app" \
+    "VoiceFlow.entitlements" \
+    "VoiceFlow.app/Contents/Resources/bin/uv"
 fi
+
+echo "🔍 Verifying signature..."
+codesign --verify --verbose VoiceFlow.app
+echo "✅ App signed successfully"
 
 # Clean up entitlements file
 rm -f VoiceFlow.entitlements
@@ -316,8 +299,15 @@ if [ "$NOTARIZE" = true ]; then
   echo ""
   echo "🔐 Starting notarization process..."
 
+  if ! voiceflow_is_developer_id_identity "$SIGNING_IDENTITY"; then
+    echo "❌ Notarization requires a Developer ID Application signing identity"
+    echo "   Current signing identity: ${SIGNING_NAME:-$SIGNING_IDENTITY}"
+    echo "   Provide CODE_SIGN_IDENTITY with a Developer ID Application certificate or install one in Keychain."
+    exit 1
+  fi
+
   # Check for required environment variables
-  if [ -z "$VOICEFLOW_APPLE_ID" ] || [ -z "$VOICEFLOW_APPLE_PASSWORD" ] || [ -z "$VOICEFLOW_TEAM_ID" ]; then
+  if [ -z "${VOICEFLOW_APPLE_ID:-}" ] || [ -z "${VOICEFLOW_APPLE_PASSWORD:-}" ] || [ -z "${VOICEFLOW_TEAM_ID:-}" ]; then
     echo "❌ Notarization requires the following environment variables:"
     echo "   VOICEFLOW_APPLE_ID - Your Apple ID email"
     echo "   VOICEFLOW_APPLE_PASSWORD - App-specific password for notarization"

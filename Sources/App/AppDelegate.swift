@@ -6,6 +6,7 @@ internal class AppDelegate: NSObject, NSApplicationDelegate {
     var audioRecorder: AudioRecorder?
     var recordingAnimationTimer: DispatchSourceTimer?
     var pressAndHoldMonitor: PressAndHoldKeyMonitor?
+    var fnGlobeMonitor: FnGlobeMonitor?
     var pressAndHoldConfiguration = PressAndHoldSettings.configuration()
-    var isHoldRecordingActive = false
+    var pressAndHoldTriggerState = PressAndHoldTriggerState()
 }

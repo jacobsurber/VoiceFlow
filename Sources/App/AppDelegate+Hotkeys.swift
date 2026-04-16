@@ -2,60 +2,101 @@ import AppKit
 import ApplicationServices
 import os.log
 
-internal extension AppDelegate {
+extension AppDelegate {
+    private enum RecordingTriggerOrigin {
+        case shortcut(PressAndHoldMode)
+        case dock
+    }
+
     func configureShortcutMonitors() {
-        pressAndHoldMonitor?.stop()
-        pressAndHoldMonitor = nil
-        isHoldRecordingActive = false
+        stopShortcutMonitors()
+
+        if audioRecorder?.isRecording == true {
+            // Keep the current hold state so an active recording can still be released normally.
+        } else if pressAndHoldTriggerState.isStartPending {
+            // Treat reconfiguration during async startup as a release request so the startup task
+            // cancels cleanly instead of orphaning a half-started press-and-hold session.
+            _ = pressAndHoldTriggerState.handleKeyUp()
+        } else {
+            pressAndHoldTriggerState.reset()
+        }
 
         let newConfiguration = PressAndHoldSettings.configuration()
         pressAndHoldConfiguration = newConfiguration
 
         guard newConfiguration.enabled else { return }
 
-        let keyUpHandler: (() -> Void)? = (newConfiguration.mode == .hold) ? { [weak self] in
-            self?.handlePressAndHoldKeyUp()
-        } : nil
+        if newConfiguration.isFnGlobeEnabled {
+            configureFnGlobeMonitor(for: newConfiguration)
+            return
+        }
 
         let monitor = PressAndHoldKeyMonitor(
             configuration: newConfiguration,
             keyDownHandler: { [weak self] in
                 self?.handlePressAndHoldKeyDown()
             },
-            keyUpHandler: keyUpHandler
+            keyUpHandler: pressAndHoldKeyUpHandler(for: newConfiguration)
         )
 
         pressAndHoldMonitor = monitor
-        let started = monitor.start()
+        if !monitor.start() {
+            Logger.app.info(
+                "Press-and-hold monitor not started because Accessibility permission is not granted. VoiceFlow will keep the floating dock available and wait for explicit permission setup."
+            )
+        }
+    }
 
-        if !started {
-            // Accessibility permission not granted — trigger the system prompt
-            let checkOptionPrompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-            let options = [checkOptionPrompt: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
+    private func configureFnGlobeMonitor(for configuration: PressAndHoldConfiguration) {
+        let inputMonitoringPermissionManager = InputMonitoringPermissionManager()
+        let inputMonitoringGranted = inputMonitoringPermissionManager.checkPermission()
 
-            // Poll until permission is granted, then restart the monitor
-            Task { @MainActor in
-                for _ in 0..<120 {  // up to 60 seconds
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    if AXIsProcessTrusted() {
-                        monitor.start()
-                        break
-                    }
-                }
-            }
+        FnGlobeHotkeyPreferenceStore.syncForConfiguration(
+            configuration,
+            inputMonitoringGranted: inputMonitoringGranted
+        )
+
+        guard FnGlobeHotkeyPreferenceStore.warningAcknowledged(), inputMonitoringGranted else { return }
+
+        let monitor = FnGlobeMonitor(
+            keyDownHandler: { [weak self] in
+                self?.handlePressAndHoldKeyDown()
+            },
+            keyUpHandler: pressAndHoldKeyUpHandler(for: configuration),
+            readinessHandler: { readiness, message in
+                FnGlobeHotkeyPreferenceStore.setReadiness(readiness, message: message)
+            },
+            inputMonitoringPermissionManager: inputMonitoringPermissionManager
+        )
+
+        fnGlobeMonitor = monitor
+        _ = monitor.start()
+    }
+
+    private func stopShortcutMonitors() {
+        pressAndHoldMonitor?.stop()
+        pressAndHoldMonitor = nil
+        fnGlobeMonitor?.stop()
+        fnGlobeMonitor = nil
+    }
+
+    private func pressAndHoldKeyUpHandler(for configuration: PressAndHoldConfiguration) -> (() -> Void)? {
+        guard configuration.mode == .hold else { return nil }
+
+        return { [weak self] in
+            self?.handlePressAndHoldKeyUp()
         }
     }
 
     private func handlePressAndHoldKeyDown() {
         switch pressAndHoldConfiguration.mode {
         case .hold:
-            startRecordingFromPressAndHold()
+            startRecordingFromPressAndHold(origin: .shortcut(.hold))
         case .toggle:
             if audioRecorder?.isRecording == true {
                 stopRecordingFromPressAndHold()
             } else {
-                startRecordingFromPressAndHold()
+                startRecordingFromPressAndHold(origin: .shortcut(.toggle))
             }
         }
     }
@@ -65,28 +106,69 @@ internal extension AppDelegate {
         stopRecordingFromPressAndHold()
     }
 
-    private func startRecordingFromPressAndHold() {
+    func handleFloatingMicrophoneDockPrimaryAction() {
+        if audioRecorder?.isRecording == true {
+            stopRecordingFromPressAndHold()
+        } else {
+            startRecordingFromPressAndHold(origin: .dock)
+        }
+    }
+
+    func cancelFloatingMicrophoneDockRecording() {
         guard let recorder = audioRecorder else { return }
 
+        pressAndHoldTriggerState.reset()
+        FloatingMicrophoneDockManager.shared.resetInteractionState()
+
         if recorder.isRecording {
-            isHoldRecordingActive = true
-            return
+            recorder.cancelRecording()
         }
 
-        if !recorder.hasPermission {
+        resetToIdleState()
+    }
+
+    func showFloatingMicrophoneDockSettings() {
+        let selectedNav: DashboardNavItem = (audioRecorder?.hasPermission == true) ? .recording : .permissions
+        DashboardWindowManager.shared.showDashboardWindow(selectedNav: selectedNav)
+    }
+
+    private func startRecordingFromPressAndHold(origin: RecordingTriggerOrigin) {
+        guard let recorder = audioRecorder else { return }
+
+        switch pressAndHoldTriggerState.handleKeyDown(
+            recorderIsRecording: recorder.isRecording
+        ) {
+        case .ignore:
             return
+        case .keepExistingRecording:
+            return
+        case .beginAsyncStart:
+            break
+        }
+
+        switch origin {
+        case .shortcut(let mode):
+            FloatingMicrophoneDockManager.shared.prepareForShortcutActivation(mode: mode)
+        case .dock:
+            FloatingMicrophoneDockManager.shared.prepareForDockActivation()
         }
 
         Task { @MainActor in
             let success = await recorder.startRecording()
-            if success {
-                isHoldRecordingActive = true
+
+            switch pressAndHoldTriggerState.handleStartCompletion(success: success) {
+            case .recordingStarted:
                 updateMenuBarIcon(isRecording: true)
                 SoundManager().playRecordingStartSound()
-            } else {
-                isHoldRecordingActive = false
-                // Silent failure - just don't start recording
+            case .cancelStartedRecording:
+                recorder.cancelRecording()
+                FloatingMicrophoneDockManager.shared.resetInteractionState()
+                resetToIdleState()
+            case .startFailed:
+                FloatingMicrophoneDockManager.shared.handleRecordingStartFailed()
                 Logger.app.warning("Failed to start recording from press-and-hold")
+            case .noOp:
+                break
             }
         }
     }
@@ -94,25 +176,32 @@ internal extension AppDelegate {
     private func stopRecordingFromPressAndHold() {
         Logger.app.debug("stopRecordingFromPressAndHold called")
 
-        guard isHoldRecordingActive else {
+        switch pressAndHoldTriggerState.handleKeyUp() {
+        case .ignore:
             Logger.app.debug("Not active, returning")
             return
+        case .awaitPendingStart:
+            Logger.app.debug("Recording start still pending, waiting for startup task")
+            return
+        case .stopRecording:
+            break
         }
 
         guard let recorder = audioRecorder else {
             Logger.app.error("No audioRecorder available")
-            isHoldRecordingActive = false
+            pressAndHoldTriggerState.reset()
+            FloatingMicrophoneDockManager.shared.resetInteractionState()
             return
         }
 
         guard recorder.isRecording else {
             Logger.app.error("Recorder not recording")
-            isHoldRecordingActive = false
+            pressAndHoldTriggerState.reset()
+            FloatingMicrophoneDockManager.shared.resetInteractionState()
             return
         }
 
         Logger.app.debug("Starting stop sequence...")
-        isHoldRecordingActive = false
 
         // Keep recording animation running during transcription
         // (icon will reset to idle when transcription completes)
@@ -146,7 +235,7 @@ internal extension AppDelegate {
                 let coordinator = TranscriptionCoordinator.shared
 
                 // Set progress handler to update menu bar (optional)
-                coordinator.progressHandler = { [weak self] message in
+                coordinator.progressHandler = { message in
                     Logger.app.debug("Transcription progress: \(message)")
                 }
 
@@ -191,7 +280,8 @@ internal extension AppDelegate {
     private func currentSourceAppInfo() -> SourceAppInfo {
         // Get the frontmost app that's not VoiceFlow
         if let frontmostApp = NSWorkspace.shared.frontmostApplication,
-           frontmostApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            frontmostApp.bundleIdentifier != Bundle.main.bundleIdentifier
+        {
             return SourceAppInfo.from(app: frontmostApp) ?? SourceAppInfo.unknown
         }
 
@@ -230,13 +320,15 @@ internal extension AppDelegate {
         let indigoColor = NSColor(red: 0.39, green: 0.40, blue: 0.95, alpha: 1.0)
 
         // Create indigo tinted image
-        let indigoImage = NSImage(systemSymbolName: "mic.circle.fill", accessibilityDescription: "Recording")?.withSymbolConfiguration(config)
+        let indigoImage = NSImage(systemSymbolName: "mic.circle.fill", accessibilityDescription: "Recording")?
+            .withSymbolConfiguration(config)
         indigoImage?.isTemplate = false
         let indigoOutlineImage = indigoImage?.tinted(with: indigoColor)
 
         // Create dimmed version for pulse effect
         let dimmedIndigoColor = NSColor(red: 0.39, green: 0.40, blue: 0.95, alpha: 0.5)
-        let dimmedImage = NSImage(systemSymbolName: "mic.circle.fill", accessibilityDescription: "Recording")?.withSymbolConfiguration(config)
+        let dimmedImage = NSImage(systemSymbolName: "mic.circle.fill", accessibilityDescription: "Recording")?
+            .withSymbolConfiguration(config)
         dimmedImage?.isTemplate = false
         let dimmedOutlineImage = dimmedImage?.tinted(with: dimmedIndigoColor)
 

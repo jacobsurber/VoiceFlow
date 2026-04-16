@@ -1,53 +1,6 @@
 import Foundation
 import SwiftUI
-import UserNotifications
 import os.log
-
-/// Saves and restores full clipboard contents (rich text, images, files — not just plain strings).
-private struct ClipboardSnapshot {
-    private let items: [[(NSPasteboard.PasteboardType, Data)]]
-
-    private init(items: [[(NSPasteboard.PasteboardType, Data)]]) {
-        self.items = items
-    }
-
-    static func capture() -> ClipboardSnapshot {
-        let pasteboard = NSPasteboard.general
-        var snapshot: [[(NSPasteboard.PasteboardType, Data)]] = []
-
-        for item in pasteboard.pasteboardItems ?? [] {
-            var typeData: [(NSPasteboard.PasteboardType, Data)] = []
-            for type in item.types {
-                if let data = item.data(forType: type) {
-                    typeData.append((type, data))
-                }
-            }
-            if !typeData.isEmpty {
-                snapshot.append(typeData)
-            }
-        }
-
-        return ClipboardSnapshot(items: snapshot)
-    }
-
-    func restore() {
-        guard !items.isEmpty else { return }
-
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-
-        var pasteboardItems: [NSPasteboardItem] = []
-        for itemData in items {
-            let item = NSPasteboardItem()
-            for (type, data) in itemData {
-                item.setData(data, forType: type)
-            }
-            pasteboardItems.append(item)
-        }
-
-        pasteboard.writeObjects(pasteboardItems)
-    }
-}
 
 /// Coordinates transcription processing independently of UI.
 /// Handles audio transcription, semantic correction, history saving, and smart paste.
@@ -98,7 +51,9 @@ internal final class TranscriptionCoordinator {
             transcriptionProvider = provider
         } else {
             let storedProvider = UserDefaults.standard.string(forKey: AppDefaults.Keys.transcriptionProvider)
-            transcriptionProvider = storedProvider.flatMap { TranscriptionProvider(rawValue: $0) } ?? AppDefaults.defaultTranscriptionProvider
+            transcriptionProvider =
+                storedProvider.flatMap { TranscriptionProvider(rawValue: $0) }
+                ?? AppDefaults.defaultTranscriptionProvider
         }
 
         // Get model from UserDefaults if not specified
@@ -107,7 +62,8 @@ internal final class TranscriptionCoordinator {
             whisperModel = selectedModel
         } else {
             let storedModel = UserDefaults.standard.string(forKey: AppDefaults.Keys.selectedWhisperModel)
-            whisperModel = storedModel.flatMap { WhisperModel(rawValue: $0) } ?? AppDefaults.defaultWhisperModel
+            whisperModel =
+                storedModel.flatMap { WhisperModel(rawValue: $0) } ?? AppDefaults.defaultWhisperModel
         }
 
         // Transcribe audio
@@ -115,7 +71,8 @@ internal final class TranscriptionCoordinator {
         if transcriptionProvider == .local {
             // Ensure model is downloaded before transcription
             try await ensureWhisperModelIsReady(whisperModel)
-            text = try await speechService.transcribeRaw(audioURL: audioURL, provider: transcriptionProvider, model: whisperModel)
+            text = try await speechService.transcribeRaw(
+                audioURL: audioURL, provider: transcriptionProvider, model: whisperModel)
         } else {
             text = try await speechService.transcribeRaw(audioURL: audioURL, provider: transcriptionProvider)
         }
@@ -123,7 +80,9 @@ internal final class TranscriptionCoordinator {
         try Task.checkCancellation()
 
         // Get semantic correction mode
-        let modeRaw = UserDefaults.standard.string(forKey: AppDefaults.Keys.semanticCorrectionMode) ?? SemanticCorrectionMode.off.rawValue
+        let modeRaw =
+            UserDefaults.standard.string(forKey: AppDefaults.Keys.semanticCorrectionMode)
+            ?? SemanticCorrectionMode.off.rawValue
         let mode = SemanticCorrectionMode(rawValue: modeRaw) ?? .off
 
         // Apply semantic correction if enabled
@@ -151,14 +110,19 @@ internal final class TranscriptionCoordinator {
         let wordCount = UsageMetricsStore.estimatedWordCount(for: finalText)
         let characterCount = finalText.count
 
-        // Save current clipboard contents for restoration after paste
-        let savedClipboard = ClipboardSnapshot.capture()
-
-        // Copy to clipboard
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(finalText, forType: .string)
-
-        // Note: History saving removed - fully transactional workflow
+        // Save to transcript history
+        let record = TranscriptionRecord(
+            text: finalText,
+            provider: transcriptionProvider,
+            duration: sessionDuration,
+            modelUsed: transcriptionProvider == .local ? whisperModel.rawValue : nil,
+            wordCount: wordCount,
+            characterCount: characterCount,
+            sourceAppBundleId: sourceAppInfo?.bundleIdentifier,
+            sourceAppName: sourceAppInfo?.displayName,
+            sourceAppIconData: sourceAppInfo?.iconData
+        )
+        await DataManager.shared.saveTranscriptionQuietly(record)
 
         // Record usage metrics
         if let duration = sessionDuration {
@@ -172,25 +136,19 @@ internal final class TranscriptionCoordinator {
         // Record source app usage
         recordSourceUsage(words: wordCount, characters: characterCount, sourceInfo: sourceAppInfo)
 
-        // Auto-paste if enabled and requested
-        var didPaste = false
+        // Type directly into the focused app (bypasses clipboard entirely)
         if shouldPaste {
-            let enableSmartPaste = UserDefaults.standard.bool(forKey: "enableSmartPaste")
+            let enableSmartPaste = UserDefaults.standard.bool(forKey: AppDefaults.Keys.enableSmartPaste)
+            Logger.app.debug("SmartPaste enabled=\(enableSmartPaste)")
             if enableSmartPaste {
                 try? await Task.sleep(for: .milliseconds(100))
-                didPaste = pasteManager.pasteToActiveApp()
+                let didType = pasteManager.typeToActiveApp(text: finalText)
+                Logger.app.debug("SmartPaste type result=\(didType)")
 
-                if !didPaste {
-                    // Paste failed (accessibility denied, etc.) — notify user
-                    await showPasteFailureNotification()
+                if !didType {
+                    await showPasteFailureAlert()
                 }
             }
-        }
-
-        // Restore previous clipboard after paste has had time to complete
-        if didPaste {
-            try? await Task.sleep(for: .milliseconds(500))
-            savedClipboard.restore()
         }
 
         Logger.app.info("Transcription completed: \(wordCount) words, \(characterCount) characters")
@@ -221,7 +179,7 @@ internal final class TranscriptionCoordinator {
     }
 
     private func waitForWhisperModelDownload(_ model: WhisperModel) async throws {
-        let timeout: TimeInterval = 20 * 60 // 20 minutes
+        let timeout: TimeInterval = 20 * 60  // 20 minutes
         let startedAt = Date()
         var didRetry = false
 
@@ -273,7 +231,8 @@ internal final class TranscriptionCoordinator {
     private func currentSourceAppInfo() -> SourceAppInfo {
         // Get the frontmost app that's not VoiceFlow
         if let frontmostApp = NSWorkspace.shared.frontmostApplication,
-           frontmostApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            frontmostApp.bundleIdentifier != Bundle.main.bundleIdentifier
+        {
             return SourceAppInfo.from(app: frontmostApp) ?? SourceAppInfo.unknown
         }
 
@@ -286,19 +245,25 @@ internal final class TranscriptionCoordinator {
         return SourceAppInfo.unknown
     }
 
-    private func showPasteFailureNotification() async {
-        let content = UNMutableNotificationContent()
-        content.title = "Paste Failed"
-        content.body = "Text copied to clipboard — press ⌘V to paste"
-        content.sound = .default
+    private func showPasteFailureAlert() async {
+        guard !AppEnvironment.isRunningTests else { return }
 
-        let request = UNNotificationRequest(
-            identifier: "paste-failed-\(UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
+        let alert = NSAlert()
+        alert.messageText = "Smart Paste Requires Accessibility Permission"
+        alert.informativeText =
+            "VoiceFlow needs Accessibility permission to type text into other apps. Your transcription has been copied to the clipboard.\n\nTo enable Smart Paste:\n1. Open System Settings > Privacy & Security > Accessibility\n2. Add VoiceFlow and toggle it ON"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open Accessibility Settings")
+        alert.addButton(withTitle: "OK")
 
-        try? await UNUserNotificationCenter.current().add(request)
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            if let url = URL(
+                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     private func recordSourceUsage(words: Int, characters: Int, sourceInfo: SourceAppInfo?) {

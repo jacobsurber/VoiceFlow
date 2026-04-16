@@ -1,14 +1,18 @@
-import XCTest
 import AppKit
+import XCTest
+
 @testable import VoiceFlow
 
 final class PressAndHoldKeyMonitorTests: XCTestCase {
     private var addedEvents: [(NSEvent.EventTypeMask, (NSEvent) -> Void)] = []
     private var removedEvents: [Any] = []
+    private var defaultsSuiteNames: [String] = []
 
     override func tearDown() {
         addedEvents.removeAll()
         removedEvents.removeAll()
+        defaultsSuiteNames.forEach { UserDefaults.standard.removePersistentDomain(forName: $0) }
+        defaultsSuiteNames.removeAll()
         super.tearDown()
     }
 
@@ -38,6 +42,19 @@ final class PressAndHoldKeyMonitorTests: XCTestCase {
         )
     }
 
+    private func makeDefaults(file: StaticString = #filePath, line: UInt = #line) -> UserDefaults {
+        let suiteName = "PressAndHoldKeyMonitorTests.\(UUID().uuidString)"
+        defaultsSuiteNames.append(suiteName)
+
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Failed to create UserDefaults suite", file: file, line: line)
+            return .standard
+        }
+
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
+
     // MARK: - start()
 
     func testStartRegistersFlagMonitorForModifierKey() {
@@ -48,6 +65,64 @@ final class PressAndHoldKeyMonitorTests: XCTestCase {
 
         XCTAssertEqual(addedEvents.count, 1)
         XCTAssertEqual(addedEvents.first?.0, .flagsChanged)
+    }
+
+    func testConfigurationPreservesStoredGlobeSelection() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppDefaults.Keys.pressAndHoldEnabled)
+        defaults.set(PressAndHoldKey.globe.rawValue, forKey: AppDefaults.Keys.pressAndHoldKeyIdentifier)
+        defaults.set(PressAndHoldMode.hold.rawValue, forKey: AppDefaults.Keys.pressAndHoldMode)
+
+        let configuration = PressAndHoldSettings.configuration(using: defaults)
+
+        XCTAssertEqual(configuration.key, .globe)
+    }
+
+    func testConfigurationMapsLegacyFnSelectionToGlobe() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppDefaults.Keys.pressAndHoldEnabled)
+        defaults.set("fn", forKey: AppDefaults.Keys.pressAndHoldKeyIdentifier)
+        defaults.set(PressAndHoldMode.hold.rawValue, forKey: AppDefaults.Keys.pressAndHoldMode)
+
+        let configuration = PressAndHoldSettings.configuration(using: defaults)
+
+        XCTAssertEqual(configuration.key, .globe)
+    }
+
+    func testConfigurationAutoAcknowledgesExistingGlobeSelection() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppDefaults.Keys.pressAndHoldEnabled)
+        defaults.set(PressAndHoldKey.globe.rawValue, forKey: AppDefaults.Keys.pressAndHoldKeyIdentifier)
+
+        _ = PressAndHoldSettings.configuration(using: defaults)
+
+        XCTAssertEqual(
+            defaults.object(forKey: AppDefaults.Keys.pressAndHoldFnWarningAcknowledged) as? Bool, true)
+    }
+
+    func testUpdatePersistsGlobeSelection() {
+        let defaults = makeDefaults()
+        let configuration = PressAndHoldConfiguration(enabled: true, key: .globe, mode: .toggle)
+
+        PressAndHoldSettings.update(configuration, using: defaults)
+
+        XCTAssertEqual(
+            defaults.string(forKey: AppDefaults.Keys.pressAndHoldKeyIdentifier),
+            PressAndHoldKey.globe.rawValue
+        )
+        XCTAssertEqual(
+            defaults.string(forKey: AppDefaults.Keys.pressAndHoldMode),
+            PressAndHoldMode.toggle.rawValue
+        )
+    }
+
+    func testStartReturnsFalseForGlobeKey() {
+        let monitor = makeMonitor(
+            configuration: PressAndHoldConfiguration(enabled: true, key: .globe, mode: .hold)
+        )
+
+        XCTAssertFalse(monitor.start())
+        XCTAssertTrue(addedEvents.isEmpty)
     }
 
     // MARK: - Transitions
@@ -65,7 +140,7 @@ final class PressAndHoldKeyMonitorTests: XCTestCase {
 
         monitor.processTransition(isKeyDownEvent: true)  // first press
         monitor.processTransition(isKeyDownEvent: true)  // repeat press ignored
-        monitor.processTransition(isKeyDownEvent: false) // release
+        monitor.processTransition(isKeyDownEvent: false)  // release
         monitor.processTransition(isKeyDownEvent: true)  // second press
 
         wait(for: [expectationDown], timeout: 1.0)

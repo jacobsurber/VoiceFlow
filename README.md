@@ -38,6 +38,10 @@ Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local Wh
 git clone https://github.com/jacobsurber/VoiceFlow.git
 cd VoiceFlow
 
+# Optional but recommended for local development builds.
+# Creates a stable signing identity so macOS privacy permissions persist.
+make setup-local-signing
+
 # Build and install to /Applications/
 make install
 
@@ -48,9 +52,13 @@ make build
 make dmg
 ```
 
-After installing, grant permissions when prompted:
+After installing, grant or enable the permissions VoiceFlow needs for the features you use:
+
 - **Microphone** — requested on first recording
-- **Accessibility** — required for Press & Hold to work in other apps (System Settings > Privacy & Security > Accessibility)
+- **Accessibility** — enable in System Settings for Command/Option/Control press-and-hold and Smart Paste in other apps
+- **Input Monitoring** — enable in System Settings for standalone **Fn / Globe** capture in other apps
+
+If you build with ad-hoc or unsigned development builds, macOS can treat each rebuild as a new app and re-prompt for Microphone, Accessibility, or Input Monitoring. Running `make setup-local-signing` once avoids that by giving local builds a stable signing identity.
 
 ## Setup
 
@@ -58,16 +66,17 @@ After installing, grant permissions when prompted:
 
 Configure your provider in the Dashboard (menu bar icon > Settings):
 
-| Provider | Requires | Notes |
-|----------|----------|-------|
-| **Local WhisperKit** | Nothing (offline) | Models: Tiny (39 MB) to Large Turbo (1.5 GB). Downloads in Dashboard. |
-| **Parakeet-MLX** | Apple Silicon | English v2 or Multilingual v3 (~2.5 GB). Click "Install Dependencies" in Dashboard. |
-| **OpenAI** | API key (`sk-...`) | Supports custom endpoints (Azure, proxies). |
-| **Google Gemini** | API key (`AIza...`) | Large files auto-use Files API. |
+| Provider             | Requires            | Notes                                                                               |
+| -------------------- | ------------------- | ----------------------------------------------------------------------------------- |
+| **Local WhisperKit** | Nothing (offline)   | Models: Tiny (39 MB) to Large Turbo (1.5 GB). Downloads in Dashboard.               |
+| **Parakeet-MLX**     | Apple Silicon       | English v2 or Multilingual v3 (~2.5 GB). Click "Install Dependencies" in Dashboard. |
+| **OpenAI**           | API key (`sk-...`)  | Supports custom endpoints (Azure, proxies).                                         |
+| **Google Gemini**    | API key (`AIza...`) | Large files auto-use Files API.                                                     |
 
 ### Semantic Correction (Optional)
 
 Post-processing to fix transcription errors:
+
 - **Off** (default)
 - **Local MLX** — runs fully offline on Apple Silicon
 - **Cloud** — uses the active cloud provider
@@ -89,14 +98,14 @@ Configure the trigger key and mode in Dashboard > Recording.
 
 ## Building
 
-| Command | Description |
-|---------|-------------|
-| `make install` | Build and install to /Applications/ |
-| `make build` | Build the app bundle |
+| Command               | Description                                           |
+| --------------------- | ----------------------------------------------------- |
+| `make install`        | Build and install to /Applications/                   |
+| `make build`          | Build the app bundle                                  |
 | `make build-notarize` | Build and notarize (requires Apple Developer account) |
-| `make test` | Run test suite |
-| `make dmg` | Create DMG for distribution |
-| `make clean` | Remove build artifacts |
+| `make test`           | Run test suite                                        |
+| `make dmg`            | Create DMG for distribution                           |
+| `make clean`          | Remove build artifacts                                |
 
 ### Notarization
 
@@ -110,11 +119,15 @@ export VOICEFLOW_TEAM_ID='your-team-id'
 
 ### After Installing a New Build
 
-Since we use ad-hoc code signing, macOS invalidates Accessibility permissions when the binary changes. After each install:
+If VoiceFlow is installed with a stable signature, macOS should preserve its existing Microphone, Accessibility, and Input Monitoring permissions across reinstalls.
 
-1. System Settings > Privacy & Security > Accessibility
-2. Remove VoiceFlow, then re-add `/Applications/VoiceFlow.app`
-3. Ensure the toggle is ON
+If you are still using ad-hoc signing, or permissions already became stale from older builds, run:
+
+```bash
+make reset-permissions
+```
+
+Then re-grant the affected permissions once in System Settings.
 
 ## Privacy & Security
 
@@ -131,13 +144,18 @@ Since we use ad-hoc code signing, macOS invalidates Accessibility permissions wh
 Right-click > Open > confirm. Or run `xattr -cr /Applications/VoiceFlow.app`.
 
 **Press & Hold not working**
-Grant Accessibility permission: System Settings > Privacy & Security > Accessibility > add VoiceFlow.
+Command, Option, and Control require Accessibility permission: System Settings > Privacy & Security > Accessibility > add VoiceFlow.
+
+Fn / Globe requires Input Monitoring and may also require Keyboard > Press Globe key to be set to Do Nothing.
 
 **Smart Paste not working**
 Grant Accessibility permission (same as above). Smart Paste simulates Command+V.
 
 **Microphone not detected**
 System Settings > Privacy & Security > Microphone > enable VoiceFlow.
+
+**Microphone prompt or Fn permission keeps resetting after every rebuild**
+Your development build is likely ad-hoc signed or unsigned. Run `make setup-local-signing`, reinstall with `make install`, then re-grant permissions once.
 
 ## Contributing
 

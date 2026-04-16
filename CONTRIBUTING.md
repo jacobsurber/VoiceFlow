@@ -15,6 +15,7 @@ Thank you for your interest in contributing to VoiceFlow! This guide covers deve
 ```bash
 git clone https://github.com/jacobsurber/VoiceFlow.git
 cd VoiceFlow
+make setup-local-signing
 swift build
 ```
 
@@ -77,11 +78,14 @@ codesign --verify --verbose VoiceFlow.app
 spctl -a -v VoiceFlow.app
 ```
 
-Without a Developer ID, the app gets ad-hoc signed. Recipients must right-click > Open on first launch.
+Without a Developer ID, VoiceFlow now prefers any stable local code-signing identity it can find, including a locally generated development identity. If no stable identity exists, the app falls back to ad-hoc signing and macOS privacy permissions can reset after each rebuild.
+
+For local development, run `make setup-local-signing` once to generate a persistent self-signed code-signing identity in your login keychain. That keeps Microphone, Accessibility, and Input Monitoring permissions stable across rebuilds.
 
 ## Architecture Overview
 
 ### Technology Stack
+
 - **SwiftUI** + **AppKit** — UI and menu bar integration
 - **AVFoundation** — Audio recording
 - **Alamofire** — HTTP requests
@@ -89,6 +93,7 @@ Without a Developer ID, the app gets ad-hoc signed. Recipients must right-click 
 - **Keychain** — Secure API key storage
 
 ### Project Structure
+
 ```
 VoiceFlow/
 ├── Sources/
@@ -119,10 +124,13 @@ VoiceFlow/
 ## Common Issues
 
 ### Permission Issues After Rebuild
-Ad-hoc signing means macOS invalidates Accessibility permissions on each rebuild. See [ACCESSIBILITY-FIX.md](ACCESSIBILITY-FIX.md).
+
+Ad-hoc signing can invalidate Microphone, Accessibility, and Input Monitoring permissions after each rebuild. Run `make setup-local-signing` before your first install to avoid this, or use `make reset-permissions` to re-grant permissions after a rebuild. See [ACCESSIBILITY-FIX.md](ACCESSIBILITY-FIX.md).
 
 ### Safe-to-Ignore Warnings
+
 These Apple framework warnings are harmless:
+
 - `AddInstanceForFactory: No factory registered...`
 - `LoudnessManager.mm: unknown value: Mac16,13`
 

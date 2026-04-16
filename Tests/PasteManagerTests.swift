@@ -1,5 +1,6 @@
-import XCTest
 import AppKit
+import XCTest
+
 @testable import VoiceFlow
 
 @MainActor
@@ -76,5 +77,40 @@ final class PasteManagerTests: XCTestCase {
         let result = manager.pasteToActiveApp()
 
         XCTAssertFalse(result)
+    }
+
+    // MARK: - Direct Typing (typeToActiveApp)
+
+    func testTypeToActiveAppReturnsFalseWhenDisabled() {
+        UserDefaults.standard.set(false, forKey: "enableSmartPaste")
+
+        let manager = makeManager(permissionGranted: true)
+        let result = manager.typeToActiveApp(text: "should not type")
+
+        XCTAssertFalse(result)
+    }
+
+    func testTypeToActiveAppReturnsFalseInTestEnvironment() {
+        UserDefaults.standard.set(true, forKey: "enableSmartPaste")
+
+        let manager = makeManager(permissionGranted: true)
+        // In test environment, CGEvent operations are blocked — should return false
+        let result = manager.typeToActiveApp(text: "test env")
+
+        XCTAssertFalse(result)
+    }
+
+    func testTypeToActiveAppDoesNotTouchClipboard() {
+        UserDefaults.standard.set(true, forKey: "enableSmartPaste")
+
+        // Put known content on clipboard
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("original clipboard", forType: .string)
+
+        let manager = makeManager(permissionGranted: true)
+        _ = manager.typeToActiveApp(text: "new text")
+
+        // Clipboard must remain untouched
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "original clipboard")
     }
 }

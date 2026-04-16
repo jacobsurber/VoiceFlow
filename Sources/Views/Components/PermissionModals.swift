@@ -3,11 +3,11 @@ import SwiftUI
 internal struct PermissionEducationModal: View {
     let onProceed: () -> Void
     let onCancel: () -> Void
-    
+
     private var enableSmartPaste: Bool {
-        UserDefaults.standard.bool(forKey: "enableSmartPaste")
+        UserDefaults.standard.bool(forKey: AppDefaults.Keys.enableSmartPaste)
     }
-    
+
     var body: some View {
         VStack(spacing: 20) {
             HStack(spacing: 16) {
@@ -21,24 +21,29 @@ internal struct PermissionEducationModal: View {
                 }
             }
             .accessibilityLabel("Permissions required")
-            
+
             VStack(spacing: 12) {
                 Text(enableSmartPaste ? "Permissions Required" : "Microphone Permission Required")
                     .font(.title2)
                     .fontWeight(.semibold)
-                
-                Text(enableSmartPaste ? 
-                     "VoiceFlow needs permissions to work properly:" :
-                     "VoiceFlow needs microphone access to record audio:")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                
+
+                Text(
+                    enableSmartPaste
+                        ? "VoiceFlow needs permissions to work properly:"
+                        : "VoiceFlow needs microphone access to record audio:"
+                )
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Microphone access to record audio", systemImage: "mic.circle.fill")
                         .foregroundStyle(.blue)
                     if enableSmartPaste {
-                        Label("Accessibility access to paste transcribed text", systemImage: "accessibility.circle.fill")
-                            .foregroundStyle(.green)
+                        Label(
+                            "Accessibility access to paste transcribed text",
+                            systemImage: "accessibility.circle.fill"
+                        )
+                        .foregroundStyle(.green)
                     }
                     Label("Your audio is never stored permanently", systemImage: "lock.circle.fill")
                         .foregroundStyle(.secondary)
@@ -46,19 +51,21 @@ internal struct PermissionEducationModal: View {
                 .font(.callout)
                 .foregroundStyle(.primary)
             }
-            
+
             HStack(spacing: 12) {
                 Button("Not Now") {
                     onCancel()
                 }
                 .buttonStyle(.bordered)
                 .accessibilityHint("Dismiss this dialog without granting permissions")
-                
+
                 Button(enableSmartPaste ? "Allow Permissions" : "Allow Microphone Access") {
                     onProceed()
                 }
                 .buttonStyle(.borderedProminent)
-                .accessibilityHint(enableSmartPaste ? "Grant microphone and accessibility permissions" : "Grant microphone permission")
+                .accessibilityHint(
+                    enableSmartPaste
+                        ? "Grant microphone and accessibility permissions" : "Grant microphone permission")
             }
         }
         .padding(24)
@@ -72,36 +79,36 @@ internal struct PermissionEducationModal: View {
 internal struct PermissionRecoveryModal: View {
     let onOpenSettings: () -> Void
     let onCancel: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(.largeTitle))
                 .foregroundStyle(.orange)
                 .accessibilityLabel("Warning: Permissions denied")
-            
+
             VStack(spacing: 12) {
                 Text("Permissions Required")
                     .font(.title2)
                     .fontWeight(.semibold)
-                
+
                 Text("VoiceFlow needs microphone and accessibility permissions to work properly.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
-                
+
                 VStack(spacing: 8) {
                     HStack {
                         Text("1.")
                             .fontWeight(.semibold)
                         Text("Click 'Open System Settings' below")
                     }
-                    
+
                     HStack {
                         Text("2.")
                             .fontWeight(.semibold)
                         Text("Enable VoiceFlow in 'Microphone' section")
                     }
-                    
+
                     HStack {
                         Text("3.")
                             .fontWeight(.semibold)
@@ -111,14 +118,14 @@ internal struct PermissionRecoveryModal: View {
                 .font(.callout)
                 .foregroundStyle(.primary)
             }
-            
+
             HStack(spacing: 12) {
                 Button("Cancel") {
                     onCancel()
                 }
                 .buttonStyle(.bordered)
                 .accessibilityHint("Dismiss this dialog without opening System Settings")
-                
+
                 Button("Open System Settings") {
                     onOpenSettings()
                 }

@@ -1,93 +1,114 @@
-# VoiceFlow — LLM Assistant Guidelines
+# VoiceFlow
 
-This document provides instructions for AI assistants (e.g., ChatGPT, Claude) on how to work effectively with the VoiceFlow codebase. Follow these guidelines when analyzing, proposing changes, or implementing features.
+macOS menu bar app for voice-to-text transcription. Swift 5.9+, macOS 14+.
 
-## 1. Purpose and Scope
-
-- **Primary Role**: Assist developers by reading existing code, suggesting idiomatic Swift implementations, writing tests, and fixing bugs.
-- **Focus Areas**:
-  - Adherence to Swift and SwiftUI best practices
-  - Memory safety and thread correctness
-  - Consistent use of existing libraries and patterns
-  - Comprehensive test coverage
-
-## 2. Libraries and Frameworks
-
-VoiceFlow relies on:
-- **SwiftUI** + **AppKit** for UI and macOS menu bar integration
-- **AVFoundation** for audio recording
-- **Alamofire** for HTTP requests and model downloads
-- **WhisperKit** (CoreML) for local transcription
-- **Combine** / Swift Concurrency for asynchronous logic
-- **KeychainAccess** for secure API key storage
-
-When extending functionality, prefer these existing dependencies over introducing new ones.
-
-## 3. Code Style and Best Practices
-
-- **Swift 5.7+** targeting **macOS 14+** (use modern APIs).
-- Avoid force unwrapping (`!`); prefer `guard let` and optional chaining.
-- Use value types (`struct`/`enum`) by default; reserve `class` for reference semantics or bridging.
-- Prevent retain cycles with `[weak self]` or `unowned self` in closures.
-- Dispatch UI updates on the main actor or `DispatchQueue.main`.
-- Keep functions small (≤ 40 lines) and single-purpose.
-- Write concise comments only for non-obvious logic; favor self-documenting code.
-- Follow existing naming conventions, file structure, and grouping.
-
-## 4. Testing
-
-- Write **XCTest** unit tests for all new or modified logic.
-- Cover edge cases, error paths, and concurrency scenarios.
-- Ensure `swift test --parallel --enable-code-coverage` passes without failures.
-- Keep tests deterministic and isolate external dependencies with mocks.
-
-## 5. Memory Safety and Concurrency
-
-- Use Swift Concurrency (`async`/`await`) or Combine for asynchronous flows.
-- Prevent data races: confine shared state to actors or serial queues.
-- Clean up observers, timers, and resources in `deinit` or task cancellation.
-- Annotate UI components with `@MainActor` when required.
-
-## 6. Pull Request Guidelines for AI Outputs
-
-- Provide minimal, focused patches for the requested change.
-- Run `swift build`, `swift test`, and any linting checks before submitting.
-- Do not introduce unrelated changes or fix pre-existing warnings.
-- Include a brief rationale and testing steps in the PR description.
-
-## 7. Building and Deploying
-
-### Quick Build & Deploy
+## Commands
 
 ```bash
-# Recommended: build, sign, install to /Applications, and print permission instructions
-make install
+# Dev workflow (day-to-day)
+swift build
+swift run                              # Run without app bundle/signing
+swift test
+swift test --filter AudioRecorderTests # Run single test suite
 
-# Or for a release (universal) build:
-make build
-
-# Run tests:
-make test
+# Release workflow
+make install          # Build, sign, install to /Applications/
+make build            # Universal binary app bundle
+make build-notarize   # Signed + notarized (requires env vars below)
+make test             # Run tests via scripts/run-tests.sh
+make dmg              # Create DMG for distribution
+make clean            # Remove .build/, VoiceFlow.app, zips, dmgs
 ```
 
-### Accessibility Permission (SmartPaste)
+### Notarization Env Vars
 
-**Critical**: The app uses adhoc code signing. When replacing the app bundle, macOS invalidates existing Accessibility permissions because the code signature hash changes.
+```bash
+export VOICEFLOW_APPLE_ID='your-apple-id@example.com'
+export VOICEFLOW_APPLE_PASSWORD='app-specific-password'
+export VOICEFLOW_TEAM_ID='your-team-id'
+```
 
-After deploying a new build, the user must:
-1. Open **System Settings > Privacy & Security > Accessibility**
-2. **Remove** VoiceFlow from the list (select it, click `-`)
-3. **Re-add** it (click `+`, navigate to `/Applications/VoiceFlow.app`)
-4. Ensure the toggle is **ON**
+## Architecture
 
-Without this, SmartPaste will silently fail (paste won't work).
+```
+Sources/
+├── App/              # Entry point (AudioWhisperApp.swift), AppDelegate + extensions,
+│                     #   AppDefaults (UserDefaults keys), AppStatus, AppEnvironment
+├── Services/
+│   ├── Audio/        # AudioRecorder, AudioProcessor, AudioValidator, SoundManager
+│   ├── TranscriptionCoordinator.swift  # Core orchestrator: routes to correct engine
+│   ├── SpeechToTextService.swift       # Cloud transcription (OpenAI, Gemini)
+│   ├── LocalWhisperService.swift       # WhisperKit (CoreML) transcription
+│   ├── ParakeetService.swift           # Parakeet-MLX transcription (via Python daemon)
+│   ├── SemanticCorrectionService.swift # Post-processing correction router
+│   ├── MLXCorrectionService.swift      # Local MLX-based correction
+│   ├── ModelManager.swift              # WhisperKit model downloads
+│   ├── MLXModelManager.swift           # MLX model management
+│   ├── KeychainService.swift           # API key storage (macOS Keychain)
+│   ├── UvBootstrap.swift               # Bootstraps Python uv for ML daemon
+│   ├── PythonDetector.swift            # Finds Python installation
+│   └── WhisperKitStorage.swift         # WhisperKit model storage paths
+├── Managers/         # PressAndHoldKeyMonitor, PasteManager, PermissionManager,
+│                     #   AccessibilityPermissionManager, MLDaemonManager,
+│                     #   AppCategoryManager, MicrophoneVolumeManager
+├── Stores/           # DataManager (SwiftData), UsageMetricsStore, CategoryStore,
+│                     #   SourceUsageStore — all persistence
+├── Models/           # TranscriptionTypes, TranscriptionRecord, TranscriptionError,
+│                     #   ModelEntry, CategoryDefinition, SemanticCorrectionTypes
+├── Views/
+│   ├── Dashboard/    # Main settings UI (DashboardView + provider/recording/prefs views)
+│   └── Components/   # Reusable UI (RecordingButton, PermissionModals, InkRippleView)
+├── Utilities/        # Logger, ResourceLocator, VersionInfo, LayoutMetrics, ErrorPresenter
+├── Extensions/       # NSImage+Tinting
+├── Helpers/          # PermissionChecker
+├── ml/               # Python ML daemon package (Parakeet, MLX correction)
+└── Resources/        # pyproject.toml, uv.lock, bundled uv binary
+```
 
-### Troubleshooting
+### Key Patterns
 
-- **"Build succeeded" then "Build failed"**: The Swift build works but post-build steps fail. Check if `.build/arm64-apple-macosx/release/VoiceFlow` exists and run `scripts/install-voiceflow.sh` manually.
-- **SmartPaste broken after deploy**: Re-grant Accessibility permission (see above).
-- **App won't launch**: Check `codesign -dvvv /Applications/VoiceFlow.app` for signing issues.
+- **AppDelegate extensions**: `AppDelegate.swift` is split into `+Hotkeys`, `+Lifecycle`, `+Notifications` extensions.
+- **TranscriptionCoordinator**: Central orchestrator that routes recording to the active engine and handles correction.
+- **Python ML subsystem**: `UvBootstrap.swift` installs `uv`, `MLDaemonManager` manages the Python daemon process, `PythonDetector` locates Python. Parakeet and MLX correction run via this daemon.
+- **VersionInfo.swift**: Generated from `VersionInfo.swift.template` at build time. `VERSION` file at repo root tracks the current version (currently 2.1.0).
 
----
+## Libraries
 
-*This file is intended solely for guiding AI assistants. Do not expose it in end-user documentation.*
+- **SwiftUI** + **AppKit** — UI and menu bar
+- **AVFoundation** — Audio recording
+- **Alamofire** — HTTP requests and model downloads
+- **WhisperKit** — Local CoreML transcription
+- **Combine** / Swift Concurrency — Async logic
+- **macOS Keychain** (via `KeychainService.swift`) — API key storage
+
+Prefer existing dependencies over introducing new ones.
+
+## Code Style
+
+- Avoid force unwrapping (`!`); prefer `guard let` and optional chaining.
+- Value types (`struct`/`enum`) by default; `class` only for reference semantics.
+- `[weak self]` in closures to prevent retain cycles.
+- `@MainActor` on UI components; dispatch UI updates on main.
+- Functions ≤ 40 lines, single-purpose.
+- Follow existing naming conventions and file grouping.
+
+## Testing
+
+- **XCTest** for all new/modified logic. Mocks live in `Tests/Mocks/`.
+- `swift test --parallel --enable-code-coverage` must pass.
+- Keep tests deterministic; isolate external dependencies with mocks.
+- Run a single suite: `swift test --filter <TestClassName>`
+
+## Environment
+
+- **Data directory**: `~/Library/Application Support/VoiceFlow/`
+- **Custom correction prompts**: `~/Library/Application Support/VoiceFlow/prompts/*_prompt.txt`
+- **VERSION file**: Repo root, read by release scripts.
+- **VersionInfo.swift.template**: `Sources/` — build scripts generate `VersionInfo.swift` with git hash.
+
+## Gotchas
+
+- **Accessibility permission invalidated on every rebuild** (ad-hoc signing). After `make install`: System Settings > Accessibility > remove VoiceFlow > re-add `/Applications/VoiceFlow.app` > toggle ON. SmartPaste silently fails without this.
+- **"Build succeeded" then "Build failed"**: Swift build works but post-build steps fail. Check if `.build/arm64-apple-macosx/release/VoiceFlow` exists; run `scripts/install-voiceflow.sh` manually.
+- **Safe-to-ignore warnings**: `AddInstanceForFactory: No factory registered...` and `LoudnessManager.mm: unknown value` are Apple framework noise.
+- **Entry point is `AudioWhisperApp.swift`**, not `VoiceFlowApp.swift` (legacy naming from the AudioWhisper fork).

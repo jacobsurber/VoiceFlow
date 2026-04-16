@@ -129,3 +129,12 @@ __pycache__
 VoiceFlow.iconset/
 .build-uv/
 .beads/
+
+# Local benchmark artifacts
+Benchmarks/*.local.json
+Benchmarks/fixtures/*
+!Benchmarks/fixtures/.gitkeep
+!Benchmarks/fixtures/README.md
+Benchmarks/results/*
+!Benchmarks/results/.gitkeep
+!Benchmarks/results/README.md

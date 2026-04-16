@@ -1,23 +1,26 @@
-import AppKit
 import AVFoundation
+import AppKit
 import os.log
 
 internal class PermissionChecker {
 
-    /// Check all required permissions at app startup
+    /// Passive startup check. VoiceFlow no longer triggers system permission dialogs on launch.
     static func checkAndPromptForPermissions() {
-        // Request microphone permission using system prompt
-        Task {
-            let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-            if micStatus == .notDetermined {
-                _ = await AVCaptureDevice.requestAccess(for: .audio)
-            }
+        let configuration = PressAndHoldSettings.configuration()
+        let needsInputMonitoring = configuration.requiresInputMonitoringPermission(
+            warningAcknowledged: FnGlobeHotkeyPreferenceStore.warningAcknowledged()
+        )
+        let needsAccessibility =
+            UserDefaults.standard.bool(forKey: AppDefaults.Keys.enableSmartPaste)
+            || configuration.requiresAccessibilityPermission
+
+        if needsInputMonitoring {
+            let inputMonitoringPermissionManager = InputMonitoringPermissionManager()
+            _ = inputMonitoringPermissionManager.checkPermission()
         }
 
-        // Request accessibility permission using system prompt
-        // kAXTrustedCheckOptionPrompt triggers the native system dialog
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        guard needsAccessibility else { return }
+        _ = AXIsProcessTrusted()
     }
 
     /// Request microphone permission explicitly
