@@ -1,10 +1,10 @@
-# VoiceFlow
+# Whisp
 
 A lightweight macOS menu bar app for voice-to-text transcription. Press and hold a key, speak, release, and your words appear as text — copied to clipboard and optionally pasted into the active app.
 
 Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local WhisperKit (CoreML), and Parakeet-MLX (Apple Silicon).
 
-> Forked from [mazdak/AudioWhisper](https://github.com/mazdak/AudioWhisper).
+> Forked from [jacobsurber/VoiceFlow](https://github.com/jacobsurber/VoiceFlow), originally [mazdak/AudioWhisper](https://github.com/mazdak/AudioWhisper).
 
 ## Features
 
@@ -26,7 +26,7 @@ Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local Wh
 
 ### Download from Releases
 
-1. Download the latest `.dmg` from [Releases](https://github.com/jacobsurber/VoiceFlow/releases)
+1. Download the latest `.dmg` from [Releases](https://github.com/amirsalaar/whisp/releases)
 2. Drag VoiceFlow.app to your Applications folder
 3. Launch and configure through the Dashboard
 
@@ -35,7 +35,7 @@ Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local Wh
 ### Build from Source
 
 ```bash
-git clone https://github.com/jacobsurber/VoiceFlow.git
+git clone https://github.com/amirsalaar/VoiceFlow.git
 cd VoiceFlow
 
 # Optional but recommended for local development builds.

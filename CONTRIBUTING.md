@@ -13,7 +13,7 @@ Thank you for your interest in contributing to VoiceFlow! This guide covers deve
 ### Initial Setup
 
 ```bash
-git clone https://github.com/jacobsurber/VoiceFlow.git
+git clone https://github.com/amirsalaar/VoiceFlow.git
 cd VoiceFlow
 make setup-local-signing
 swift build
