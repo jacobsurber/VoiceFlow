@@ -1,9 +1,11 @@
+import AppKit
 import SwiftUI
 
 internal struct DashboardHistoryView: View {
     @State private var records: [TranscriptionRecord] = []
     @State private var isLoading = true
     @State private var showClearConfirmation = false
+    @State private var copiedRecordID: UUID?
 
     var body: some View {
         Group {
@@ -97,6 +99,18 @@ internal struct DashboardHistoryView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
+
+                    Spacer()
+
+                    Button {
+                        copyText(record.text, recordID: record.id)
+                    } label: {
+                        Image(systemName: copiedRecordID == record.id ? "checkmark" : "doc.on.doc")
+                            .foregroundStyle(copiedRecordID == record.id ? .green : .secondary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy transcript")
                 }
             }
             .padding(.vertical, 4)
@@ -113,5 +127,20 @@ internal struct DashboardHistoryView: View {
     private func clearHistory() async {
         try? await DataManager.shared.deleteAllRecords()
         records = []
+    }
+
+    private func copyText(_ text: String, recordID: UUID) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        withAnimation {
+            copiedRecordID = recordID
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                if copiedRecordID == recordID {
+                    copiedRecordID = nil
+                }
+            }
+        }
     }
 }
