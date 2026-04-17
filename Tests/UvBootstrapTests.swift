@@ -175,7 +175,8 @@ final class UvBootstrapTests: XCTestCase {
 
     private func writeManagedUvArchive(to archiveURL: URL, managedUvLogFile: URL) throws -> String {
         let stagingRoot = tempHome.appendingPathComponent("uv-archive-staging", isDirectory: true)
-        let extractedDir = stagingRoot.appendingPathComponent(expectedManagedUvArchiveRootName(), isDirectory: true)
+        let extractedDir = stagingRoot.appendingPathComponent(
+            expectedManagedUvArchiveRootName(), isDirectory: true)
         try FileManager.default.createDirectory(at: extractedDir, withIntermediateDirectories: true)
 
         _ = try writeUvStub(

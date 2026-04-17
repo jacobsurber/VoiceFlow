@@ -12,11 +12,13 @@ internal enum UvError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .uvNotFound:
-            return "uv not found. Whisp could not find a managed copy of uv. Try setup again, or install it manually with: brew install uv"
-        case let .uvTooOld(found, required):
+            return
+                "uv not found. Whisp could not find a managed copy of uv. Try setup again, or install it manually with: brew install uv"
+        case .uvTooOld(let found, let required):
             return "uv version \(found) is too old; require \(required)+"
         case .uvInstallFailed(let msg):
-            return "Whisp could not install uv automatically: \(msg)\n\nTry again with an internet connection, or install it manually with: brew install uv"
+            return
+                "Whisp could not install uv automatically: \(msg)\n\nTry again with an internet connection, or install it manually with: brew install uv"
         case .pythonNotUsable(let msg):
             return "Python not usable: \(msg)"
         case .venvCreationFailed(let msg):
@@ -89,7 +91,8 @@ internal struct UvBootstrap {
         }
         // Per-user tools dir
         if let toolsURL = try? applicationSupportBaseDirectory()
-            .appendingPathComponent("Whisp/bin", isDirectory: true) {
+            .appendingPathComponent("Whisp/bin", isDirectory: true)
+        {
             let url = toolsURL.appendingPathComponent("uv")
             if FileManager.default.isExecutableFile(atPath: url.path) {
                 if let ver = try? uvVersion(at: url) {
@@ -104,7 +107,7 @@ internal struct UvBootstrap {
 
     // Ensure project exists and dependencies are synced with uv. Returns path to project .venv python.
     // If userPython is nil, we let uv provision or use its managed interpreter (via --python 3.x)
-    static func ensureVenv(userPython: String? = nil, log: ((String)->Void)? = nil) throws -> URL {
+    static func ensureVenv(userPython: String? = nil, log: ((String) -> Void)? = nil) throws -> URL {
         let uv = try ensureUv(log: log)
         let proj = try projectDir()
 
@@ -130,9 +133,9 @@ internal struct UvBootstrap {
         // Return the project venv python
         let candidates = [
             proj.appendingPathComponent(".venv/bin/python3").path,
-            proj.appendingPathComponent(".venv/bin/python").path
+            proj.appendingPathComponent(".venv/bin/python").path,
         ]
-        for c in candidates { if fm.isExecutableFile(atPath: c) { return URL(fileURLWithPath: c) } }
+        for c in candidates where fm.isExecutableFile(atPath: c) { return URL(fileURLWithPath: c) }
         throw UvError.pythonNotUsable("project venv python not found")
     }
 
@@ -142,7 +145,10 @@ internal struct UvBootstrap {
         let fm = FileManager.default
         // Support both flattened and nested resource layouts for pyproject.toml only.
         // We intentionally do NOT copy a bundled uv.lock to avoid mismatches.
-        let pyCandidates = [res.appendingPathComponent("pyproject.toml"), res.appendingPathComponent("Resources/pyproject.toml")]
+        let pyCandidates = [
+            res.appendingPathComponent("pyproject.toml"),
+            res.appendingPathComponent("Resources/pyproject.toml"),
+        ]
         if let src = pyCandidates.first(where: { fm.fileExists(atPath: $0.path) }) {
             let dest = proj.appendingPathComponent("pyproject.toml")
             try copyIfDifferent(src: src, dst: dest)
@@ -166,12 +172,14 @@ internal struct UvBootstrap {
 
     private static func installManagedUv(log: ((String) -> Void)? = nil) throws -> URL {
         let fm = FileManager.default
-        let toolsDir = try applicationSupportBaseDirectory().appendingPathComponent("Whisp/bin", isDirectory: true)
+        let toolsDir = try applicationSupportBaseDirectory().appendingPathComponent(
+            "Whisp/bin", isDirectory: true)
         if !fm.fileExists(atPath: toolsDir.path) {
             try fm.createDirectory(at: toolsDir, withIntermediateDirectories: true)
         }
 
-        let tempDir = fm.temporaryDirectory.appendingPathComponent("Whisp-uv-install-\(UUID().uuidString)", isDirectory: true)
+        let tempDir = fm.temporaryDirectory.appendingPathComponent(
+            "Whisp-uv-install-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tempDir) }
 
@@ -188,7 +196,8 @@ internal struct UvBootstrap {
 
             let uvURL = toolsDir.appendingPathComponent("uv")
             guard fm.isExecutableFile(atPath: uvURL.path) else {
-                throw UvError.uvInstallFailed("installer completed, but no executable uv was found in \(toolsDir.path)")
+                throw UvError.uvInstallFailed(
+                    "installer completed, but no executable uv was found in \(toolsDir.path)")
             }
 
             let version = try uvVersion(at: uvURL)
@@ -286,7 +295,8 @@ internal struct UvBootstrap {
             .split(separator: ":")
             .map(String.init)
             .filter { !$0.isEmpty }
-        for required in systemExecutablePath.split(separator: ":").map(String.init) where !components.contains(required) {
+        for required in systemExecutablePath.split(separator: ":").map(String.init)
+        where !components.contains(required) {
             components.append(required)
         }
         return components.joined(separator: ":")
@@ -309,7 +319,8 @@ internal struct UvBootstrap {
             }
             return url
         }
-        return try fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        return try fm.url(
+            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
     }
 
     private static func uvVersion(at url: URL) throws -> String {
@@ -341,13 +352,17 @@ internal struct UvBootstrap {
     }
 
     @discardableResult
-    private static func run(_ cmd: String, _ args: [String], environment: [String: String]? = nil) -> (String, String, Int32) {
+    private static func run(_ cmd: String, _ args: [String], environment: [String: String]? = nil) -> (
+        String, String, Int32
+    ) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: cmd)
         p.arguments = args
         p.environment = mergedProcessEnvironment(environment)
-        let outPipe = Pipe(); let errPipe = Pipe()
-        p.standardOutput = outPipe; p.standardError = errPipe
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        p.standardOutput = outPipe
+        p.standardError = errPipe
         do { try p.run() } catch { return ("", String(describing: error), 1) }
         p.waitUntilExit()
         let out = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
@@ -356,14 +371,18 @@ internal struct UvBootstrap {
     }
 
     @discardableResult
-    private static func runInDir(_ cmd: String, _ args: [String], cwd: URL, environment: [String: String]? = nil) -> (String, String, Int32) {
+    private static func runInDir(
+        _ cmd: String, _ args: [String], cwd: URL, environment: [String: String]? = nil
+    ) -> (String, String, Int32) {
         let p = Process()
         p.currentDirectoryURL = cwd
         p.executableURL = URL(fileURLWithPath: cmd)
         p.arguments = args
         p.environment = mergedProcessEnvironment(environment)
-        let outPipe = Pipe(); let errPipe = Pipe()
-        p.standardOutput = outPipe; p.standardError = errPipe
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        p.standardOutput = outPipe
+        p.standardError = errPipe
         do { try p.run() } catch { return ("", String(describing: error), 1) }
         p.waitUntilExit()
         let out = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
