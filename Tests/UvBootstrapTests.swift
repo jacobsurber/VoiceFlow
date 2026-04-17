@@ -1,11 +1,15 @@
+import CryptoKit
 import Foundation
 import XCTest
+
 @testable import Whisp
 
 final class UvBootstrapTests: XCTestCase {
     private var originalHome: String?
     private var originalPath: String?
     private var originalAppSupportOverride: String?
+    private var originalArchivePathOverride: String?
+    private var originalArchiveSHAOverride: String?
     private var tempHome: URL!
     private var tempAppSupport: URL!
     private var tempBin: URL!
@@ -15,8 +19,11 @@ final class UvBootstrapTests: XCTestCase {
         originalHome = ProcessInfo.processInfo.environment["HOME"]
         originalPath = ProcessInfo.processInfo.environment["PATH"]
         originalAppSupportOverride = ProcessInfo.processInfo.environment["WHISP_APP_SUPPORT_DIR"]
+        originalArchivePathOverride = ProcessInfo.processInfo.environment["WHISP_UV_ARCHIVE_PATH"]
+        originalArchiveSHAOverride = ProcessInfo.processInfo.environment["WHISP_UV_ARCHIVE_SHA256"]
 
-        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent("UvBootstrapTests-\(UUID().uuidString)")
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "UvBootstrapTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         tempHome = tempRoot
         tempAppSupport = tempRoot.appendingPathComponent("AppSupport", isDirectory: true)
@@ -42,6 +49,16 @@ final class UvBootstrapTests: XCTestCase {
         } else {
             unsetenv("WHISP_APP_SUPPORT_DIR")
         }
+        if let originalArchivePathOverride {
+            setenv("WHISP_UV_ARCHIVE_PATH", originalArchivePathOverride, 1)
+        } else {
+            unsetenv("WHISP_UV_ARCHIVE_PATH")
+        }
+        if let originalArchiveSHAOverride {
+            setenv("WHISP_UV_ARCHIVE_SHA256", originalArchiveSHAOverride, 1)
+        } else {
+            unsetenv("WHISP_UV_ARCHIVE_SHA256")
+        }
         if let tempHome {
             try? FileManager.default.removeItem(at: tempHome)
         }
@@ -54,7 +71,7 @@ final class UvBootstrapTests: XCTestCase {
         XCTAssertEqual(whichUVPath(), uvURL.path)
 
         XCTAssertThrowsError(try UvBootstrap.findUv()) { error in
-            guard case let UvError.uvTooOld(found, required) = error else {
+            guard case UvError.uvTooOld(let found, let required) = error else {
                 return XCTFail("Expected uvTooOld, got \(error)")
             }
             XCTAssertEqual(found, "0.8.4")
@@ -96,8 +113,11 @@ final class UvBootstrapTests: XCTestCase {
             let binContents = try? FileManager.default.contentsOfDirectory(atPath: binPath.path)
             let logContents = (try? String(contentsOf: logURL)) ?? "<empty>"
             let exists = FileManager.default.fileExists(atPath: binPath.path)
-            let python3Exists = FileManager.default.isExecutableFile(atPath: binPath.appendingPathComponent("python3").path)
-            XCTFail("ensureVenv threw \(error); project: \(project.path); binExists: \(exists); python3Exists: \(python3Exists); .venv/bin contents: \(binContents ?? []); log: \(logContents)")
+            let python3Exists = FileManager.default.isExecutableFile(
+                atPath: binPath.appendingPathComponent("python3").path)
+            XCTFail(
+                "ensureVenv threw \(error); project: \(project.path); binExists: \(exists); python3Exists: \(python3Exists); .venv/bin contents: \(binContents ?? []); log: \(logContents)"
+            )
             return
         }
 
@@ -109,10 +129,32 @@ final class UvBootstrapTests: XCTestCase {
         let invocations = try String(contentsOf: logURL).split(separator: "\n")
         XCTAssertTrue(invocations.contains(where: { $0.contains("--version") }))
         XCTAssertTrue(
-            invocations.contains(where: { $0.contains("venv --python \(UvBootstrap.defaultPythonVersion)") }) ||
-            FileManager.default.fileExists(atPath: project.appendingPathComponent(".venv").path)
+            invocations.contains(where: { $0.contains("venv --python \(UvBootstrap.defaultPythonVersion)") })
+                || FileManager.default.fileExists(atPath: project.appendingPathComponent(".venv").path)
         )
         XCTAssertTrue(invocations.contains(where: { $0.contains("sync") }))
+    }
+
+    func testEnsureVenvInstallsManagedUvWhenMissing() throws {
+        let archiveURL = tempHome.appendingPathComponent(expectedManagedUvArchiveName())
+        let uvLogURL = tempHome.appendingPathComponent("managed_uv_invocations.log")
+        let archiveSHA = try writeManagedUvArchive(to: archiveURL, managedUvLogFile: uvLogURL)
+        setenv("WHISP_UV_ARCHIVE_PATH", archiveURL.path, 1)
+        setenv("WHISP_UV_ARCHIVE_SHA256", archiveSHA, 1)
+
+        var logMessages: [String] = []
+        let pythonURL = try UvBootstrap.ensureVenv(userPython: nil) { logMessages.append($0) }
+
+        let managedUvURL = tempAppSupport.appendingPathComponent("Whisp/bin/uv")
+        XCTAssertNil(whichUVPath())
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: managedUvURL.path))
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: pythonURL.path))
+        XCTAssertTrue(logMessages.contains("Downloading uv..."))
+        XCTAssertTrue(logMessages.contains("Installing uv..."))
+
+        let invocations = try String(contentsOf: uvLogURL)
+        XCTAssertTrue(invocations.contains("--version"))
+        XCTAssertTrue(invocations.contains("sync"))
     }
 
     // MARK: - Helpers
@@ -131,15 +173,47 @@ final class UvBootstrapTests: XCTestCase {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func writeManagedUvArchive(to archiveURL: URL, managedUvLogFile: URL) throws -> String {
+        let stagingRoot = tempHome.appendingPathComponent("uv-archive-staging", isDirectory: true)
+        let extractedDir = stagingRoot.appendingPathComponent(expectedManagedUvArchiveRootName(), isDirectory: true)
+        try FileManager.default.createDirectory(at: extractedDir, withIntermediateDirectories: true)
+
+        _ = try writeUvStub(
+            version: "0.8.6",
+            logFile: managedUvLogFile,
+            to: extractedDir.appendingPathComponent("uv")
+        )
+        try writeExecutable("#!/bin/bash\nexit 0\n", to: extractedDir.appendingPathComponent("uvx"))
+
+        let tar = Process()
+        tar.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        tar.arguments = ["-czf", archiveURL.path, "-C", stagingRoot.path, expectedManagedUvArchiveRootName()]
+        try tar.run()
+        tar.waitUntilExit()
+        XCTAssertEqual(tar.terminationStatus, 0)
+
+        let digest = SHA256.hash(data: try Data(contentsOf: archiveURL))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return digest
+    }
+
+    private func expectedManagedUvArchiveName() -> String {
+        Arch.isAppleSilicon ? "uv-aarch64-apple-darwin.tar.gz" : "uv-x86_64-apple-darwin.tar.gz"
+    }
+
+    private func expectedManagedUvArchiveRootName() -> String {
+        expectedManagedUvArchiveName().replacingOccurrences(of: ".tar.gz", with: "")
+    }
+
     @discardableResult
-    private func writeUvStub(version: String, logFile: URL? = nil) throws -> URL {
-        let uvURL = tempBin.appendingPathComponent("uv")
+    private func writeUvStub(version: String, logFile: URL? = nil, to url: URL? = nil) throws -> URL {
+        let uvURL = url ?? tempBin.appendingPathComponent("uv")
         var lines: [String] = ["#!/bin/bash"]
         lines.append("dir=\"$(pwd)\"")
         if let logFile {
             lines.append("echo \"$dir :: $*\" >> \"\(logFile.path)\"")
         }
-        // Always ensure a minimal venv layout so tests remain deterministic
         lines.append("mkdir -p \"$dir/.venv/bin\"")
         lines.append("cat > \"$dir/.venv/bin/python3\" <<'PY'\n#!/bin/bash\necho python\nPY")
         lines.append("chmod +x \"$dir/.venv/bin/python3\"")

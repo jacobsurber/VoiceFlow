@@ -1,8 +1,10 @@
+import CryptoKit
 import Foundation
 
 internal enum UvError: Error, LocalizedError {
     case uvNotFound
     case uvTooOld(found: String, required: String)
+    case uvInstallFailed(String)
     case pythonNotUsable(String)
     case venvCreationFailed(String)
     case syncFailed(String)
@@ -10,9 +12,11 @@ internal enum UvError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .uvNotFound:
-            return "uv not found. Install with: brew install uv — or bundle an arm64 uv at Sources/Resources/bin/uv."
+            return "uv not found. Whisp could not find a managed copy of uv. Try setup again, or install it manually with: brew install uv"
         case let .uvTooOld(found, required):
             return "uv version \(found) is too old; require \(required)+"
+        case .uvInstallFailed(let msg):
+            return "Whisp could not install uv automatically: \(msg)\n\nTry again with an internet connection, or install it manually with: brew install uv"
         case .pythonNotUsable(let msg):
             return "Python not usable: \(msg)"
         case .venvCreationFailed(let msg):
@@ -26,6 +30,26 @@ internal enum UvError: Error, LocalizedError {
 internal struct UvBootstrap {
     static let minUvVersion = "0.8.5"
     static let defaultPythonVersion = "3.11"
+    private static let managedUvVersion = "0.11.7"
+    private static let systemExecutablePath = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+    private static var managedUvArchiveName: String {
+        Arch.isAppleSilicon ? "uv-aarch64-apple-darwin.tar.gz" : "uv-x86_64-apple-darwin.tar.gz"
+    }
+
+    private static var managedUvArchiveRootName: String {
+        managedUvArchiveName.replacingOccurrences(of: ".tar.gz", with: "")
+    }
+
+    private static var managedUvArchiveSHA256: String {
+        Arch.isAppleSilicon
+            ? "66e37d91f839e12481d7b932a1eccbfe732560f42c1cfb89faddfa2454534ba8"
+            : "0a4bc8fcde4974ea3560be21772aeecab600a6f43fa6e58169f9fa7b3b71d302"
+    }
+
+    private static var managedUvDownloadURL: String {
+        "https://github.com/astral-sh/uv/releases/download/\(managedUvVersion)/\(managedUvArchiveName)"
+    }
 
     // Where we keep the app-managed project (contains pyproject + .venv)
     static func projectDir() throws -> URL {
@@ -81,7 +105,7 @@ internal struct UvBootstrap {
     // Ensure project exists and dependencies are synced with uv. Returns path to project .venv python.
     // If userPython is nil, we let uv provision or use its managed interpreter (via --python 3.x)
     static func ensureVenv(userPython: String? = nil, log: ((String)->Void)? = nil) throws -> URL {
-        let uv = try findUv()
+        let uv = try ensureUv(log: log)
         let proj = try projectDir()
 
         let fm = FileManager.default
@@ -126,6 +150,147 @@ internal struct UvBootstrap {
     }
 
     // MARK: - Utilities
+
+    private static func ensureUv(log: ((String) -> Void)? = nil) throws -> URL {
+        do {
+            return try findUv()
+        } catch let error as UvError {
+            switch error {
+            case .uvNotFound, .uvTooOld:
+                return try installManagedUv(log: log)
+            default:
+                throw error
+            }
+        }
+    }
+
+    private static func installManagedUv(log: ((String) -> Void)? = nil) throws -> URL {
+        let fm = FileManager.default
+        let toolsDir = try applicationSupportBaseDirectory().appendingPathComponent("Whisp/bin", isDirectory: true)
+        if !fm.fileExists(atPath: toolsDir.path) {
+            try fm.createDirectory(at: toolsDir, withIntermediateDirectories: true)
+        }
+
+        let tempDir = fm.temporaryDirectory.appendingPathComponent("Whisp-uv-install-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tempDir) }
+
+        do {
+            let archiveURL = tempDir.appendingPathComponent(managedUvArchiveName)
+
+            log?("Downloading uv...")
+            try downloadManagedUvArchive(to: archiveURL)
+            try verifyManagedUvArchive(at: archiveURL)
+
+            log?("Installing uv...")
+            try extractManagedUvArchive(at: archiveURL, into: tempDir)
+            try installManagedUvExecutables(from: tempDir, to: toolsDir)
+
+            let uvURL = toolsDir.appendingPathComponent("uv")
+            guard fm.isExecutableFile(atPath: uvURL.path) else {
+                throw UvError.uvInstallFailed("installer completed, but no executable uv was found in \(toolsDir.path)")
+            }
+
+            let version = try uvVersion(at: uvURL)
+            guard isVersion(version, greaterOrEqualThan: minUvVersion) else {
+                throw UvError.uvTooOld(found: version, required: minUvVersion)
+            }
+            return uvURL
+        } catch let error as UvError {
+            throw error
+        } catch {
+            throw UvError.uvInstallFailed(String(describing: error))
+        }
+    }
+
+    private static func downloadManagedUvArchive(to archiveURL: URL) throws {
+        let env = ProcessInfo.processInfo.environment
+        if let overridePath = env["WHISP_UV_ARCHIVE_PATH"], !overridePath.isEmpty {
+            let srcURL = URL(fileURLWithPath: overridePath)
+            if FileManager.default.fileExists(atPath: archiveURL.path) {
+                try FileManager.default.removeItem(at: archiveURL)
+            }
+            try FileManager.default.copyItem(at: srcURL, to: archiveURL)
+            return
+        }
+
+        let (out, err, status) = run("/usr/bin/curl", ["-LsSf", managedUvDownloadURL, "-o", archiveURL.path])
+        guard status == 0, FileManager.default.fileExists(atPath: archiveURL.path) else {
+            throw UvError.uvInstallFailed(preferredProcessOutput(stdout: out, stderr: err))
+        }
+    }
+
+    private static func verifyManagedUvArchive(at archiveURL: URL) throws {
+        let env = ProcessInfo.processInfo.environment
+        let expectedDigest = (env["WHISP_UV_ARCHIVE_SHA256"] ?? managedUvArchiveSHA256)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let archiveData = try Data(contentsOf: archiveURL)
+        let digest = SHA256.hash(data: archiveData)
+            .map { String(format: "%02x", $0) }
+            .joined()
+
+        guard digest == expectedDigest else {
+            throw UvError.uvInstallFailed("downloaded uv archive checksum mismatch")
+        }
+    }
+
+    private static func extractManagedUvArchive(at archiveURL: URL, into directory: URL) throws {
+        let (out, err, status) = runInDir("/usr/bin/tar", ["-xzf", archiveURL.path], cwd: directory)
+        if status != 0 {
+            throw UvError.uvInstallFailed(preferredProcessOutput(stdout: out, stderr: err))
+        }
+    }
+
+    private static func installManagedUvExecutables(from tempDir: URL, to toolsDir: URL) throws {
+        let fm = FileManager.default
+        let extractedDir = tempDir.appendingPathComponent(managedUvArchiveRootName, isDirectory: true)
+
+        for binaryName in ["uv", "uvx"] {
+            let srcURL = extractedDir.appendingPathComponent(binaryName)
+            let dstURL = toolsDir.appendingPathComponent(binaryName)
+            guard fm.isExecutableFile(atPath: srcURL.path) else {
+                throw UvError.uvInstallFailed("downloaded archive did not contain \(binaryName)")
+            }
+            if fm.fileExists(atPath: dstURL.path) {
+                try fm.removeItem(at: dstURL)
+            }
+            try fm.copyItem(at: srcURL, to: dstURL)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dstURL.path)
+        }
+    }
+
+    private static func preferredProcessOutput(stdout: String, stderr: String) -> String {
+        let stderrTrimmed = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !stderrTrimmed.isEmpty { return stderrTrimmed }
+
+        let stdoutTrimmed = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !stdoutTrimmed.isEmpty { return stdoutTrimmed }
+
+        return "unknown error"
+    }
+
+    private static func mergedProcessEnvironment(_ overrides: [String: String]? = nil) -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        if let overrides {
+            for (key, value) in overrides {
+                env[key] = value
+            }
+        }
+        env["PATH"] = normalizedExecutablePath(env["PATH"])
+        return env
+    }
+
+    private static func normalizedExecutablePath(_ path: String?) -> String {
+        var components = (path ?? "")
+            .split(separator: ":")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        for required in systemExecutablePath.split(separator: ":").map(String.init) where !components.contains(required) {
+            components.append(required)
+        }
+        return components.joined(separator: ":")
+    }
 
     private static func which(_ cmd: String) -> String? {
         let (out, _, status) = run("/usr/bin/which", [cmd])
@@ -176,10 +341,11 @@ internal struct UvBootstrap {
     }
 
     @discardableResult
-    private static func run(_ cmd: String, _ args: [String]) -> (String, String, Int32) {
+    private static func run(_ cmd: String, _ args: [String], environment: [String: String]? = nil) -> (String, String, Int32) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: cmd)
         p.arguments = args
+        p.environment = mergedProcessEnvironment(environment)
         let outPipe = Pipe(); let errPipe = Pipe()
         p.standardOutput = outPipe; p.standardError = errPipe
         do { try p.run() } catch { return ("", String(describing: error), 1) }
@@ -190,11 +356,12 @@ internal struct UvBootstrap {
     }
 
     @discardableResult
-    private static func runInDir(_ cmd: String, _ args: [String], cwd: URL) -> (String, String, Int32) {
+    private static func runInDir(_ cmd: String, _ args: [String], cwd: URL, environment: [String: String]? = nil) -> (String, String, Int32) {
         let p = Process()
         p.currentDirectoryURL = cwd
         p.executableURL = URL(fileURLWithPath: cmd)
         p.arguments = args
+        p.environment = mergedProcessEnvironment(environment)
         let outPipe = Pipe(); let errPipe = Pipe()
         p.standardOutput = outPipe; p.standardError = errPipe
         do { try p.run() } catch { return ("", String(describing: error), 1) }
@@ -207,11 +374,9 @@ internal struct UvBootstrap {
     private static func copyIfDifferent(src: URL, dst: URL) throws {
         let fm = FileManager.default
         if fm.fileExists(atPath: dst.path) {
-            let sAttr = try fm.attributesOfItem(atPath: src.path)
-            let dAttr = try fm.attributesOfItem(atPath: dst.path)
-            let sSize = (sAttr[.size] as? NSNumber)?.intValue ?? -1
-            let dSize = (dAttr[.size] as? NSNumber)?.intValue ?? -2
-            if sSize == dSize { return }
+            let srcData = try Data(contentsOf: src)
+            let dstData = try Data(contentsOf: dst)
+            if srcData == dstData { return }
             try fm.removeItem(at: dst)
         }
         try fm.copyItem(at: src, to: dst)
