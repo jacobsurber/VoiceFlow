@@ -9,26 +9,26 @@ internal enum AppStatus: Equatable {
     case success
     case ready
     case permissionRequired
-    
+
     var message: String {
         switch self {
         case .error(let message):
             return message
         case .recording:
-            return "Recording..."
+            return "Listening…"
         case .processing(let message):
             return message
         case .downloadingModel(let message):
             return message
         case .success:
-            return "Success!"
+            return "Done"
         case .ready:
             return "Ready"
         case .permissionRequired:
-            return "Microphone access required"
+            return "Mic access needed"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .error:
@@ -47,17 +47,17 @@ internal enum AppStatus: Equatable {
             return .gray
         }
     }
-    
+
     var icon: String? {
         switch self {
         case .error:
             return "exclamationmark.triangle.fill"
         case .recording:
-            return nil // Will use pulsing circle
+            return nil  // Will use pulsing circle
         case .processing:
-            return nil // Will use spinning indicator
+            return nil  // Will use spinning indicator
         case .downloadingModel:
-            return nil // Will use a spinning indicator in the UI
+            return nil  // Will use a spinning indicator in the UI
         case .success:
             return "checkmark.circle.fill"
         case .ready:
@@ -66,7 +66,7 @@ internal enum AppStatus: Equatable {
             return "mic.slash.fill"
         }
     }
-    
+
     var shouldAnimate: Bool {
         switch self {
         case .recording, .processing, .downloadingModel:
@@ -75,7 +75,7 @@ internal enum AppStatus: Equatable {
             return false
         }
     }
-    
+
     var showInfoButton: Bool {
         switch self {
         case .permissionRequired:
@@ -88,7 +88,7 @@ internal enum AppStatus: Equatable {
 
 @Observable internal class StatusViewModel {
     var currentStatus: AppStatus = .ready
-    
+
     func updateStatus(
         isRecording: Bool,
         isProcessing: Bool,

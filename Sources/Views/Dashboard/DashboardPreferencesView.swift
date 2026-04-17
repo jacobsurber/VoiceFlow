@@ -33,7 +33,7 @@ internal struct DashboardPreferencesView: View {
                 Toggle(isOn: $floatingMicrophoneDockEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Floating Microphone Dock")
-                        Text("Keep a non-activating mic dock visible across apps and Spaces.")
+                        Text("Show a floating mic button across all apps.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -42,7 +42,7 @@ internal struct DashboardPreferencesView: View {
                 Toggle(isOn: $autoBoostMicrophoneVolume) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Auto-Boost Microphone")
-                        Text("Temporarily maximize mic input while recording.")
+                        Text("Boost mic volume while recording.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -51,7 +51,7 @@ internal struct DashboardPreferencesView: View {
                 Toggle(isOn: $enableSmartPaste) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Smart Paste")
-                        Text("Automatically paste finished transcripts.")
+                        Text("Paste transcription into the active app.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -60,7 +60,7 @@ internal struct DashboardPreferencesView: View {
                 Toggle(isOn: $playCompletionSound) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Completion Sound")
-                        Text("Play a chime when transcription finishes.")
+                        Text("Play a sound when done.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -72,8 +72,8 @@ internal struct DashboardPreferencesView: View {
                 }
             }
 
-            Section("Storage") {
-                Picker("Max Model Storage", selection: $maxModelStorageGB) {
+            Section("Model Storage") {
+                Picker("Storage limit", selection: $maxModelStorageGB) {
                     ForEach(storageOptions, id: \.self) { option in
                         Text("\(Int(option)) GB").tag(option)
                     }

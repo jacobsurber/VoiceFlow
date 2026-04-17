@@ -1,21 +1,22 @@
-import XCTest
 import SwiftUI
+import XCTest
+
 @testable import Whisp
 
 final class AppStatusTests: XCTestCase {
-    
+
     // MARK: - AppStatus Tests
-    
+
     func testAppStatusMessages() {
         XCTAssertEqual(AppStatus.error("Test error").message, "Test error")
-        XCTAssertEqual(AppStatus.recording.message, "Recording...")
+        XCTAssertEqual(AppStatus.recording.message, "Listening…")
         XCTAssertEqual(AppStatus.processing("Converting...").message, "Converting...")
         XCTAssertEqual(AppStatus.downloadingModel("Downloading Base…").message, "Downloading Base…")
-        XCTAssertEqual(AppStatus.success.message, "Success!")
+        XCTAssertEqual(AppStatus.success.message, "Done")
         XCTAssertEqual(AppStatus.ready.message, "Ready")
-        XCTAssertEqual(AppStatus.permissionRequired.message, "Microphone access required")
+        XCTAssertEqual(AppStatus.permissionRequired.message, "Mic access needed")
     }
-    
+
     func testAppStatusColors() {
         XCTAssertEqual(AppStatus.error("Test").color, .red)
         XCTAssertEqual(AppStatus.recording.color, .red)
@@ -25,7 +26,7 @@ final class AppStatusTests: XCTestCase {
         XCTAssertEqual(AppStatus.ready.color, .blue)
         XCTAssertEqual(AppStatus.permissionRequired.color, .gray)
     }
-    
+
     func testAppStatusIcons() {
         XCTAssertEqual(AppStatus.error("Test").icon, "exclamationmark.triangle.fill")
         XCTAssertNil(AppStatus.recording.icon)
@@ -35,7 +36,7 @@ final class AppStatusTests: XCTestCase {
         XCTAssertNil(AppStatus.ready.icon)
         XCTAssertEqual(AppStatus.permissionRequired.icon, "mic.slash.fill")
     }
-    
+
     func testAppStatusShouldAnimate() {
         XCTAssertFalse(AppStatus.error("Test").shouldAnimate)
         XCTAssertTrue(AppStatus.recording.shouldAnimate)
@@ -45,7 +46,7 @@ final class AppStatusTests: XCTestCase {
         XCTAssertFalse(AppStatus.ready.shouldAnimate)
         XCTAssertFalse(AppStatus.permissionRequired.shouldAnimate)
     }
-    
+
     func testAppStatusShowInfoButton() {
         XCTAssertFalse(AppStatus.error("Test").showInfoButton)
         XCTAssertFalse(AppStatus.recording.showInfoButton)
@@ -55,7 +56,7 @@ final class AppStatusTests: XCTestCase {
         XCTAssertFalse(AppStatus.ready.showInfoButton)
         XCTAssertTrue(AppStatus.permissionRequired.showInfoButton)
     }
-    
+
     func testAppStatusEquality() {
         XCTAssertEqual(AppStatus.ready, AppStatus.ready)
         XCTAssertEqual(AppStatus.recording, AppStatus.recording)
@@ -64,23 +65,23 @@ final class AppStatusTests: XCTestCase {
         XCTAssertEqual(AppStatus.error("Test"), AppStatus.error("Test"))
         XCTAssertEqual(AppStatus.processing("Test"), AppStatus.processing("Test"))
         XCTAssertEqual(AppStatus.downloadingModel("Test"), AppStatus.downloadingModel("Test"))
-        
+
         XCTAssertNotEqual(AppStatus.ready, AppStatus.recording)
         XCTAssertNotEqual(AppStatus.error("Test1"), AppStatus.error("Test2"))
         XCTAssertNotEqual(AppStatus.processing("Test1"), AppStatus.processing("Test2"))
         XCTAssertNotEqual(AppStatus.downloadingModel("Test1"), AppStatus.downloadingModel("Test2"))
     }
-    
+
     // MARK: - StatusViewModel Tests
-    
+
     func testStatusViewModelInitialState() {
         let viewModel = StatusViewModel()
         XCTAssertEqual(viewModel.currentStatus, .ready)
     }
-    
+
     func testStatusViewModelUpdateWithError() {
         let viewModel = StatusViewModel()
-        
+
         viewModel.updateStatus(
             isRecording: false,
             isProcessing: false,
@@ -90,13 +91,13 @@ final class AppStatusTests: XCTestCase {
             showSuccess: false,
             errorMessage: "Test error"
         )
-        
+
         XCTAssertEqual(viewModel.currentStatus, .error("Test error"))
     }
-    
+
     func testStatusViewModelUpdateWithSuccess() {
         let viewModel = StatusViewModel()
-        
+
         viewModel.updateStatus(
             isRecording: false,
             isProcessing: false,
@@ -105,13 +106,13 @@ final class AppStatusTests: XCTestCase {
             hasPermission: true,
             showSuccess: true
         )
-        
+
         XCTAssertEqual(viewModel.currentStatus, .success)
     }
-    
+
     func testStatusViewModelUpdateWithRecording() {
         let viewModel = StatusViewModel()
-        
+
         viewModel.updateStatus(
             isRecording: true,
             isProcessing: false,
@@ -120,13 +121,13 @@ final class AppStatusTests: XCTestCase {
             hasPermission: true,
             showSuccess: false
         )
-        
+
         XCTAssertEqual(viewModel.currentStatus, .recording)
     }
-    
+
     func testStatusViewModelUpdateWithProcessing() {
         let viewModel = StatusViewModel()
-        
+
         viewModel.updateStatus(
             isRecording: false,
             isProcessing: true,
@@ -135,13 +136,13 @@ final class AppStatusTests: XCTestCase {
             hasPermission: true,
             showSuccess: false
         )
-        
+
         XCTAssertEqual(viewModel.currentStatus, .processing("Converting audio..."))
     }
-    
+
     func testStatusViewModelUpdateWithReady() {
         let viewModel = StatusViewModel()
-        
+
         viewModel.updateStatus(
             isRecording: false,
             isProcessing: false,
@@ -150,13 +151,13 @@ final class AppStatusTests: XCTestCase {
             hasPermission: true,
             showSuccess: false
         )
-        
+
         XCTAssertEqual(viewModel.currentStatus, .ready)
     }
-    
+
     func testStatusViewModelUpdateWithPermissionRequired() {
         let viewModel = StatusViewModel()
-        
+
         viewModel.updateStatus(
             isRecording: false,
             isProcessing: false,
@@ -165,7 +166,7 @@ final class AppStatusTests: XCTestCase {
             hasPermission: false,
             showSuccess: false
         )
-        
+
         XCTAssertEqual(viewModel.currentStatus, .permissionRequired)
     }
 
@@ -183,10 +184,10 @@ final class AppStatusTests: XCTestCase {
 
         XCTAssertEqual(viewModel.currentStatus, .downloadingModel("Downloading Base…"))
     }
-    
+
     func testStatusViewModelPriorityOrder() {
         let viewModel = StatusViewModel()
-        
+
         // Error has highest priority
         viewModel.updateStatus(
             isRecording: true,
@@ -198,7 +199,7 @@ final class AppStatusTests: XCTestCase {
             errorMessage: "Error"
         )
         XCTAssertEqual(viewModel.currentStatus, .error("Error"))
-        
+
         // Success has second priority
         viewModel.updateStatus(
             isRecording: true,
@@ -209,7 +210,7 @@ final class AppStatusTests: XCTestCase {
             showSuccess: true
         )
         XCTAssertEqual(viewModel.currentStatus, .success)
-        
+
         // Recording has third priority
         viewModel.updateStatus(
             isRecording: true,
@@ -220,7 +221,7 @@ final class AppStatusTests: XCTestCase {
             showSuccess: false
         )
         XCTAssertEqual(viewModel.currentStatus, .recording)
-        
+
         // Processing has fourth priority
         viewModel.updateStatus(
             isRecording: false,
@@ -232,12 +233,12 @@ final class AppStatusTests: XCTestCase {
         )
         XCTAssertEqual(viewModel.currentStatus, .processing("Test"))
     }
-    
+
     // MARK: - Performance Tests
-    
+
     func testStatusUpdatePerformance() {
         let viewModel = StatusViewModel()
-        
+
         measure {
             for i in 0..<1000 {
                 viewModel.updateStatus(
@@ -251,7 +252,7 @@ final class AppStatusTests: XCTestCase {
             }
         }
     }
-    
+
     func testAppStatusCreationPerformance() {
         measure {
             for i in 0..<1000 {

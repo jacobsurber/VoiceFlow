@@ -22,17 +22,26 @@ internal enum TranscriptionProvider: String, CaseIterable, Codable, Sendable {
     var displayName: String {
         switch self {
         case .openai:
-            return "OpenAI Whisper (Cloud)"
+            return "OpenAI Whisper"
         case .gemini:
-            return "Google Gemini (Cloud)"
+            return "Google Gemini"
         case .local:
-            return "Whisper (Local)"
+            return "WhisperKit"
         case .parakeet:
-            return "Parakeet (Advanced)"
+            return "Parakeet"
         case .gemma:
-            return "Gemma 4 (Local)"
+            return "Gemma 4"
         case .whisperMLX:
-            return "Whisper MLX (Local)"
+            return "Whisper MLX"
+        }
+    }
+
+    var deploymentLabel: String {
+        switch self {
+        case .openai, .gemini:
+            return "Cloud"
+        case .local, .parakeet, .gemma, .whisperMLX:
+            return "On-device"
         }
     }
 }

@@ -367,17 +367,17 @@ internal struct DashboardProvidersView: View {
     private func engineConfig(for provider: TranscriptionProvider) -> EngineConfig {
         switch provider {
         case .openai:
-            return EngineConfig(tagline: "Industry-leading accuracy via cloud")
+            return EngineConfig(tagline: "Cloud-powered, high accuracy")
         case .gemini:
-            return EngineConfig(tagline: "Google's multimodal intelligence")
+            return EngineConfig(tagline: "Cloud transcription via Gemini")
         case .local:
-            return EngineConfig(tagline: "WhisperKit on Apple Silicon")
+            return EngineConfig(tagline: "On-device, private, no internet needed")
         case .parakeet:
-            return EngineConfig(tagline: "NVIDIA's neural speech engine")
+            return EngineConfig(tagline: "High-accuracy local engine")
         case .gemma:
-            return EngineConfig(tagline: "Transcription + correction in one pass")
+            return EngineConfig(tagline: "Transcribe and correct in one pass")
         case .whisperMLX:
-            return EngineConfig(tagline: "Blazing fast Whisper on Apple Silicon via MLX")
+            return EngineConfig(tagline: "Fast on-device transcription via MLX")
         }
     }
 

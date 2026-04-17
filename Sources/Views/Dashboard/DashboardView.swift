@@ -79,10 +79,10 @@ internal enum DashboardTheme {
 // MARK: - Navigation Item
 internal enum DashboardNavItem: String, CaseIterable, Identifiable, Hashable {
     case providers = "Transcription"
-    case recording = "Hotkeys"
+    case recording = "Recording"
     case history = "History"
-    case preferences = "General"
-    case permissions = "Permissions"
+    case preferences = "Preferences"
+    case permissions = "Access"
 
     var id: String { rawValue }
 
@@ -98,11 +98,11 @@ internal enum DashboardNavItem: String, CaseIterable, Identifiable, Hashable {
 
     var description: String {
         switch self {
-        case .providers: return "Transcription provider and model settings"
-        case .recording: return "Configure keyboard shortcuts"
-        case .history: return "Browse past transcriptions"
-        case .preferences: return "App behavior and preferences"
-        case .permissions: return "Required system permissions"
+        case .providers: return "Choose your engine and model"
+        case .recording: return "Microphone and shortcuts"
+        case .history: return "Past transcriptions"
+        case .preferences: return "Startup, paste, and sound"
+        case .permissions: return "Microphone and system access"
         }
     }
 }

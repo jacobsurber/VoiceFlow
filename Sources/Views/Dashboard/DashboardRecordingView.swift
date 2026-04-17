@@ -87,7 +87,7 @@ internal struct DashboardRecordingView: View {
                 Text("Press & Hold")
             } footer: {
                 Text(
-                    "Hotkeys are optional. The floating dock can start dictation with microphone access only. Command, Option, and Control require Accessibility permission to work in other apps. Fn / Globe uses Input Monitoring, may require Keyboard > Press Globe key to Do Nothing, and may need a Whisp restart after permission changes."
+                    "Hotkeys are optional. You can also start recording from the floating dock. Some keys require extra permissions — see the Access tab."
                 )
             }
         }
@@ -109,7 +109,7 @@ internal struct DashboardRecordingView: View {
             }
         } message: {
             Text(
-                "Whisp can use standalone Fn / Globe, but this mode needs explicit setup. Grant Input Monitoring, then set Keyboard > Press Globe key to Do Nothing if macOS keeps opening Emoji & Symbols or Dictation instead of starting Whisp. If macOS still blocks Fn after you grant access, quit and reopen Whisp before refreshing status."
+                "Fn / Globe requires extra setup:\n\n1. Grant Input Monitoring permission.\n2. In System Settings > Keyboard, set Press Globe key to Do Nothing.\n3. If it still does not work, quit and reopen Whisp."
             )
         }
     }

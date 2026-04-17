@@ -32,7 +32,7 @@ internal struct DashboardPermissionsView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Button("Request Access") {
+                    Button("Grant Access") {
                         requestMicrophonePermission()
                     }
                     .disabled(microphoneStatus == .authorized)
@@ -45,7 +45,7 @@ internal struct DashboardPermissionsView: View {
                 Text("Microphone")
             } footer: {
                 Text(
-                    "Microphone access is the only permission required to start dictating. Accessibility and Input Monitoring are optional for Smart Paste and background hotkeys."
+                    "Only microphone access is required to start. Accessibility and Input Monitoring are optional, for Smart Paste and hotkeys."
                 )
             }
 
@@ -92,7 +92,7 @@ internal struct DashboardPermissionsView: View {
                     }
 
                     HStack(spacing: 10) {
-                        Button("Request Access") {
+                        Button("Grant Access") {
                             refreshFnGlobePermission(requestAccess: true)
                         }
 
@@ -108,7 +108,7 @@ internal struct DashboardPermissionsView: View {
                     Text("Input Monitoring")
                 } footer: {
                     Text(
-                        "Required for standalone Fn / Globe capture. Whisp keeps Fn selected even if setup fails, so use Refresh after changing permissions or keyboard settings. If the status still does not update after granting access, quit and reopen Whisp."
+                        "Needed for the Fn/Globe hotkey. After granting access, click Refresh. If status does not update, restart Whisp."
                     )
                 }
             }

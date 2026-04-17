@@ -19,12 +19,12 @@ class TranscriptionTypesTests: XCTestCase {
     }
 
     func testTranscriptionProviderDisplayNames() {
-        XCTAssertEqual(TranscriptionProvider.openai.displayName, "OpenAI Whisper (Cloud)")
-        XCTAssertEqual(TranscriptionProvider.gemini.displayName, "Google Gemini (Cloud)")
-        XCTAssertEqual(TranscriptionProvider.local.displayName, "Whisper (Local)")
-        XCTAssertEqual(TranscriptionProvider.parakeet.displayName, "Parakeet (Advanced)")
-        XCTAssertEqual(TranscriptionProvider.gemma.displayName, "Gemma 4 (Local)")
-        XCTAssertEqual(TranscriptionProvider.whisperMLX.displayName, "Whisper MLX (Local)")
+        XCTAssertEqual(TranscriptionProvider.openai.displayName, "OpenAI Whisper")
+        XCTAssertEqual(TranscriptionProvider.gemini.displayName, "Google Gemini")
+        XCTAssertEqual(TranscriptionProvider.local.displayName, "WhisperKit")
+        XCTAssertEqual(TranscriptionProvider.parakeet.displayName, "Parakeet")
+        XCTAssertEqual(TranscriptionProvider.gemma.displayName, "Gemma 4")
+        XCTAssertEqual(TranscriptionProvider.whisperMLX.displayName, "Whisper MLX")
     }
 
     func testTranscriptionProviderRawValues() {
