@@ -18,6 +18,9 @@ make build-notarize   # Signed + notarized (requires env vars below)
 make test             # Run tests via scripts/run-tests.sh
 make dmg              # Create DMG for distribution
 make clean            # Remove .build/, Whisp.app, zips, dmgs
+make reset-permissions   # Reset accessibility permissions (fixes Smart Paste after rebuild)
+make setup-local-signing # Create persistent signing identity so permissions survive rebuilds
+make release            # Create new GitHub release (requires clean working tree)
 ```
 
 ### Notarization Env Vars
@@ -33,32 +36,40 @@ export WHISP_TEAM_ID='your-team-id'
 ```
 Sources/
 ├── App/              # Entry point (AudioWhisperApp.swift), AppDelegate + extensions,
-│                     #   AppDefaults (UserDefaults keys), AppStatus, AppEnvironment
+│                     #   AppDefaults, AppStatus, AppEnvironment, AppSetupHelper,
+│                     #   PressAndHoldTriggerState
 ├── Services/
 │   ├── Audio/        # AudioRecorder, AudioProcessor, AudioValidator, SoundManager
 │   ├── TranscriptionCoordinator.swift  # Core orchestrator: routes to correct engine
 │   ├── SpeechToTextService.swift       # Cloud transcription (OpenAI, Gemini)
 │   ├── LocalWhisperService.swift       # WhisperKit (CoreML) transcription
 │   ├── ParakeetService.swift           # Parakeet-MLX transcription (via Python daemon)
+│   ├── GemmaService.swift              # Gemma model transcription
+│   ├── WhisperMLXService.swift         # Whisper via MLX transcription
 │   ├── SemanticCorrectionService.swift # Post-processing correction router
 │   ├── MLXCorrectionService.swift      # Local MLX-based correction
 │   ├── ModelManager.swift              # WhisperKit model downloads
 │   ├── MLXModelManager.swift           # MLX model management
+│   ├── HuggingFaceCache.swift          # HuggingFace model cache management
 │   ├── KeychainService.swift           # API key storage (macOS Keychain)
 │   ├── UvBootstrap.swift               # Bootstraps Python uv for ML daemon
 │   ├── PythonDetector.swift            # Finds Python installation
 │   └── WhisperKitStorage.swift         # WhisperKit model storage paths
-├── Managers/         # PressAndHoldKeyMonitor, PasteManager, PermissionManager,
-│                     #   AccessibilityPermissionManager, MLDaemonManager,
-│                     #   AppCategoryManager, MicrophoneVolumeManager
+├── Managers/
+│   ├── Windows/      # DashboardWindowManager, FloatingMicrophoneDockManager
+│   ├── PressAndHoldKeyMonitor, FnGlobeMonitor, PasteManager, PermissionManager,
+│   └── AccessibilityPermissionManager, MLDaemonManager, AppCategoryManager,
+│       MicrophoneVolumeManager
 ├── Stores/           # DataManager (SwiftData), UsageMetricsStore, CategoryStore,
 │                     #   SourceUsageStore — all persistence
 ├── Models/           # TranscriptionTypes, TranscriptionRecord, TranscriptionError,
 │                     #   ModelEntry, CategoryDefinition, SemanticCorrectionTypes
 ├── Views/
 │   ├── Dashboard/    # Main settings UI (DashboardView + provider/recording/prefs views)
-│   └── Components/   # Reusable UI (RecordingButton, PermissionModals, InkRippleView)
-├── Utilities/        # Logger, ResourceLocator, VersionInfo, LayoutMetrics, ErrorPresenter
+│   └── Components/   # RecordingButton, PermissionModals, InkRippleView,
+│                     #   FloatingMicrophoneDockView, UnifiedModelRow
+├── Utilities/        # Logger, ResourceLocator, VersionInfo, LayoutMetrics, ErrorPresenter,
+│                     #   Color+Hex, Arch, LocalizedStrings, NotificationNames
 ├── Extensions/       # NSImage+Tinting
 ├── Helpers/          # PermissionChecker
 ├── ml/               # Python ML daemon package (Parakeet, MLX correction)
@@ -67,7 +78,7 @@ Sources/
 
 ### Key Patterns
 
-- **AppDelegate extensions**: `AppDelegate.swift` is split into `+Hotkeys`, `+Lifecycle`, `+Notifications` extensions.
+- **AppDelegate extensions**: `AppDelegate.swift` is split into `+Hotkeys`, `+Lifecycle`, `+Menu`, `+Notifications` extensions.
 - **TranscriptionCoordinator**: Central orchestrator that routes recording to the active engine and handles correction.
 - **Python ML subsystem**: `UvBootstrap.swift` installs `uv`, `MLDaemonManager` manages the Python daemon process, `PythonDetector` locates Python. Parakeet and MLX correction run via this daemon.
 - **VersionInfo.swift**: Generated from `VersionInfo.swift.template` at build time. `VERSION` file at repo root tracks the current version (currently 2.1.0).
