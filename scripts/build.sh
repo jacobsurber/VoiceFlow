@@ -36,6 +36,9 @@ BUILD_DATE=$(date '+%Y-%m-%d')
 # Read version from VERSION file or use environment variable
 DEFAULT_VERSION=$(cat VERSION | tr -d '[:space:]')
 VERSION="${WHISP_VERSION:-$DEFAULT_VERSION}"
+UNINSTALLER_APP_NAME="Uninstall Whisp"
+UNINSTALLER_APP_PATH="${UNINSTALLER_APP_NAME}.app"
+UNINSTALLER_EXECUTABLE="WhispUninstaller"
 
 echo "🎙️ Building Whisp version $VERSION..."
 
@@ -55,6 +58,7 @@ fi
 # Clean previous builds
 rm -rf .build/release
 rm -rf Whisp.app
+rm -rf "$UNINSTALLER_APP_PATH"
 rm -f Sources/AudioProcessorCLI
 
 # Create version file from template
@@ -104,6 +108,10 @@ swift build -c release --arch arm64 --arch x86_64
 # Check for the actual binary instead of exit code (swift-collections emits spurious errors)
 if [ ! -f ".build/apple/Products/Release/Whisp" ]; then
   echo "❌ Build failed - binary not found!"
+  exit 1
+fi
+if [ ! -f ".build/apple/Products/Release/${UNINSTALLER_EXECUTABLE}" ]; then
+  echo "❌ Build failed - ${UNINSTALLER_EXECUTABLE} binary not found!"
   exit 1
 fi
 
@@ -246,6 +254,41 @@ fi
 # Make executable
 chmod +x Whisp.app/Contents/MacOS/Whisp
 
+# Create uninstaller app bundle
+echo "Creating uninstaller app bundle..."
+mkdir -p "$UNINSTALLER_APP_PATH/Contents/MacOS"
+mkdir -p "$UNINSTALLER_APP_PATH/Contents/Resources"
+
+cp ".build/apple/Products/Release/${UNINSTALLER_EXECUTABLE}" "$UNINSTALLER_APP_PATH/Contents/MacOS/${UNINSTALLER_EXECUTABLE}"
+chmod +x "$UNINSTALLER_APP_PATH/Contents/MacOS/${UNINSTALLER_EXECUTABLE}"
+
+cat >"$UNINSTALLER_APP_PATH/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>${UNINSTALLER_EXECUTABLE}</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.whisp.app.uninstaller</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>${UNINSTALLER_APP_NAME}</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$BUILD_NUMBER</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+</dict>
+</plist>
+EOF
+
 # Create entitlements file for hardened runtime
 echo "Creating entitlements for hardened runtime..."
 cat >Whisp.entitlements <<'EOF'
@@ -258,6 +301,14 @@ cat >Whisp.entitlements <<'EOF'
     <key>com.apple.security.network.client</key>
     <true/>
 </dict>
+</plist>
+EOF
+
+cat >WhispUninstaller.entitlements <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict/>
 </plist>
 EOF
 
@@ -275,7 +326,15 @@ if [ -n "$SIGNING_IDENTITY" ]; then
     "Whisp.app" \
     "Whisp.entitlements" \
     "Whisp.app/Contents/Resources/bin/uv" \
-    "$SIGNING_IDENTITY"
+    "$SIGNING_IDENTITY" \
+    "com.whisp.app"
+
+  whisp_sign_app_bundle \
+    "$UNINSTALLER_APP_PATH" \
+    "WhispUninstaller.entitlements" \
+    "" \
+    "$SIGNING_IDENTITY" \
+    "com.whisp.app.uninstaller"
 else
   echo "⚠️  No stable signing identity found. Falling back to ad-hoc signing."
   echo "⚠️  macOS may re-prompt for Microphone, Accessibility, and Input Monitoring after each rebuild."
@@ -284,15 +343,55 @@ else
   whisp_sign_app_bundle \
     "Whisp.app" \
     "Whisp.entitlements" \
-    "Whisp.app/Contents/Resources/bin/uv"
+    "Whisp.app/Contents/Resources/bin/uv" \
+    "" \
+    "com.whisp.app"
+
+  whisp_sign_app_bundle \
+    "$UNINSTALLER_APP_PATH" \
+    "WhispUninstaller.entitlements" \
+    "" \
+    "" \
+    "com.whisp.app.uninstaller"
 fi
 
 echo "🔍 Verifying signature..."
 codesign --verify --verbose Whisp.app
+codesign --verify --verbose "$UNINSTALLER_APP_PATH"
 echo "✅ App signed successfully"
 
 # Clean up entitlements file
 rm -f Whisp.entitlements
+rm -f WhispUninstaller.entitlements
+
+notarize_app_bundle() {
+  local app_path="$1"
+  local archive_name="$2"
+  local log_name="$3"
+
+  echo "Creating zip for notarization: $app_path..."
+  ditto -c -k --keepParent "$app_path" "$archive_name"
+
+  echo "📤 Submitting $app_path to Apple for notarization..."
+  xcrun notarytool submit "$archive_name" \
+    --apple-id "$WHISP_APPLE_ID" \
+    --password "$WHISP_APPLE_PASSWORD" \
+    --team-id "$WHISP_TEAM_ID" \
+    --wait 2>&1 | tee "$log_name"
+
+  if grep -q "status: Accepted" "$log_name"; then
+    echo "📎 Stapling notarization ticket to $app_path..."
+    if ! xcrun stapler staple "$app_path"; then
+      echo "❌ Failed to staple notarization ticket for $app_path"
+      exit 1
+    fi
+  else
+    echo "❌ Notarization failed for $app_path. Check $log_name for details"
+    exit 1
+  fi
+
+  rm -f "$archive_name" "$log_name"
+}
 
 # Notarization (requires code signing first)
 if [ "$NOTARIZE" = true ]; then
@@ -328,42 +427,8 @@ if [ "$NOTARIZE" = true ]; then
     exit 1
   fi
 
-  # Create a zip file for notarization
-  echo "Creating zip for notarization..."
-  ditto -c -k --keepParent Whisp.app Whisp.zip
-
-  # Submit for notarization
-  echo "📤 Submitting to Apple for notarization..."
-  xcrun notarytool submit Whisp.zip \
-    --apple-id "$WHISP_APPLE_ID" \
-    --password "$WHISP_APPLE_PASSWORD" \
-    --team-id "$WHISP_TEAM_ID" \
-    --wait 2>&1 | tee notarization.log
-
-  # Check if notarization was successful
-  if grep -q "status: Accepted" notarization.log; then
-    # Staple the notarization ticket to the app
-    echo "📎 Stapling notarization ticket..."
-    xcrun stapler staple Whisp.app
-
-    if [ $? -eq 0 ]; then
-      echo "✅ Notarization ticket stapled successfully!"
-    else
-      echo "⚠️ Failed to staple notarization ticket, but app is notarized"
-    fi
-  else
-    echo "❌ Notarization failed. Check notarization.log for details"
-    echo ""
-    echo "Common issues:"
-    echo "- Ensure your Apple ID has accepted all developer agreements"
-    echo "- Check that your app-specific password is correct"
-    echo "- Verify your Team ID is correct"
-    exit 1
-  fi
-
-  # Clean up
-  rm -f Whisp.zip
-  rm -f notarization.log
+  notarize_app_bundle "Whisp.app" "Whisp.zip" "notarization.log"
+  notarize_app_bundle "$UNINSTALLER_APP_PATH" "WhispUninstaller.zip" "notarization-uninstaller.log"
 fi
 
 echo "✅ Build complete!"

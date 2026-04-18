@@ -12,6 +12,10 @@ let package = Package(
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
     ],
     targets: [
+        .target(
+            name: "WhispUninstallerCore",
+            path: "UninstallerCore"
+        ),
         .executableTarget(
             name: "Whisp",
             dependencies: ["Alamofire", "WhisperKit"],
@@ -26,11 +30,21 @@ let package = Package(
                 .copy("Resources"),
             ]
         ),
+        .executableTarget(
+            name: "WhispUninstaller",
+            dependencies: ["WhispUninstallerCore"],
+            path: "Uninstaller"
+        ),
         .testTarget(
             name: "WhispTests",
             dependencies: ["Whisp"],
             path: "Tests",
             exclude: ["README.md", "test_parakeet_transcribe.py", "__Snapshots__"]
+        ),
+        .testTarget(
+            name: "WhispUninstallerCoreTests",
+            dependencies: ["WhispUninstallerCore"],
+            path: "UninstallerTests"
         ),
     ]
 )

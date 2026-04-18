@@ -19,6 +19,26 @@
       "target": "Whisp",
       "configuration": "release",
       "preLaunchTask": "swift: Build Release Whisp"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:whisp}",
+      "name": "Debug WhispUninstaller",
+      "target": "WhispUninstaller",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug WhispUninstaller"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:whisp}",
+      "name": "Release WhispUninstaller",
+      "target": "WhispUninstaller",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release WhispUninstaller"
     }
   ]
 }
