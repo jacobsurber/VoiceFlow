@@ -209,10 +209,12 @@ jobs:
           echo "✅ Using Developer ID certificate: $SIGNING_IDENTITY"
 
       - name: Build notarized app bundles
-        run: WHISP_VERSION="${{ steps.release_version.outputs.version }}" CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" ./scripts/build.sh --notarize
+        run: WHISP_VERSION="${{ steps.release_version.outputs.version }}"
+          CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" ./scripts/build.sh --notarize
 
       - name: Create notarized DMG
-        run: WHISP_VERSION="${{ steps.release_version.outputs.version }}" ./scripts/create-dmg.sh --notarize
+        run: WHISP_VERSION="${{ steps.release_version.outputs.version }}"
+          ./scripts/create-dmg.sh --notarize
 
       - name: Create checksum
         run: shasum -a 256 "Whisp-${{ steps.release_version.outputs.version }}.dmg" >
