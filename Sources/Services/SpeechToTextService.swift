@@ -5,15 +5,19 @@ import os.log
 
 internal enum SpeechToTextError: Error, LocalizedError {
     case invalidURL
+    case invalidAudio(String)
     case apiKeyMissing(String)
     case transcriptionFailed(String)
     case localTranscriptionFailed(Error)
     case fileTooLarge
+    case noSpeechDetected
 
     var errorDescription: String? {
         switch self {
         case .invalidURL:
             return LocalizedStrings.Errors.invalidAudioFile
+        case .invalidAudio(let message):
+            return message
         case .apiKeyMissing(let provider):
             return LocalizedStrings.Errors.apiKeyMissing
                 .replacingOccurrences(of: "%@", with: provider)
@@ -25,6 +29,8 @@ internal enum SpeechToTextError: Error, LocalizedError {
                 .replacingOccurrences(of: "%@", with: error.localizedDescription)
         case .fileTooLarge:
             return LocalizedStrings.Errors.fileTooLarge
+        case .noSpeechDetected:
+            return LocalizedStrings.Errors.noSpeechDetected
         }
     }
 }
@@ -97,13 +103,8 @@ internal class SpeechToTextService {
     func transcribeRaw(audioURL: URL, provider: TranscriptionProvider, model: WhisperModel? = nil)
         async throws -> String
     {
-        // Validate audio file before processing
-        let validationResult = await AudioValidator.validateAudioFile(at: audioURL)
-        switch validationResult {
-        case .valid(_): break
-        case .invalid(let error):
-            throw SpeechToTextError.transcriptionFailed(error.localizedDescription)
-        }
+        try await validateAudioInput(audioURL)
+
         switch provider {
         case .openai:
             return try await transcribeWithOpenAI(audioURL: audioURL)
@@ -124,6 +125,8 @@ internal class SpeechToTextService {
     }
 
     func transcribe(audioURL: URL) async throws -> String {
+        try await validateAudioInput(audioURL)
+
         let useOpenAI = UserDefaults.standard.bool(forKey: "useOpenAI")
         if useOpenAI != false {  // Default to OpenAI if not set
             let text = try await transcribeWithOpenAI(audioURL: audioURL)
@@ -137,14 +140,7 @@ internal class SpeechToTextService {
     func transcribe(audioURL: URL, provider: TranscriptionProvider, model: WhisperModel? = nil) async throws
         -> String
     {
-        // Validate audio file before processing
-        let validationResult = await AudioValidator.validateAudioFile(at: audioURL)
-        switch validationResult {
-        case .valid(_):
-            break  // Audio file validated successfully
-        case .invalid(let error):
-            throw SpeechToTextError.transcriptionFailed(error.localizedDescription)
-        }
+        try await validateAudioInput(audioURL)
 
         switch provider {
         case .openai:
@@ -188,6 +184,18 @@ internal class SpeechToTextService {
         }
         // Remove trailing slash if present
         return custom.hasSuffix("/") ? String(custom.dropLast()) : custom
+    }
+
+    private func validateAudioInput(_ audioURL: URL) async throws {
+        let validationResult = await AudioValidator.validateAudioFile(at: audioURL)
+        switch validationResult {
+        case .valid:
+            return
+        case .invalid(.silentAudio):
+            throw SpeechToTextError.noSpeechDetected
+        case .invalid(let error):
+            throw SpeechToTextError.invalidAudio(error.localizedDescription)
+        }
     }
 
     /// Returns the full transcription endpoint URL for OpenAI-compatible APIs.
@@ -424,7 +432,11 @@ internal class SpeechToTextService {
         do {
             let text = try await localWhisperService.transcribe(audioFileURL: audioURL, model: model) { _ in
             }
-            return Self.cleanTranscriptionText(text)
+            let cleaned = Self.cleanTranscriptionText(text)
+            guard !cleaned.isEmpty else { throw SpeechToTextError.noSpeechDetected }
+            return cleaned
+        } catch let e as SpeechToTextError {
+            throw e
         } catch {
             throw SpeechToTextError.localTranscriptionFailed(error)
         }
@@ -451,17 +463,22 @@ internal class SpeechToTextService {
                 async let transcription = parakeetService.transcribe(
                     audioFileURL: audioURL, pythonPath: pythonPath)
                 let (text, _) = try await (transcription, warmupTask)
-                return Self.cleanTranscriptionText(text)
+                let cleaned = Self.cleanTranscriptionText(text)
+                guard !cleaned.isEmpty else { throw SpeechToTextError.noSpeechDetected }
+                return cleaned
             } else {
                 let text = try await parakeetService.transcribe(
                     audioFileURL: audioURL, pythonPath: pythonPath)
-                return Self.cleanTranscriptionText(text)
+                let cleaned = Self.cleanTranscriptionText(text)
+                guard !cleaned.isEmpty else { throw SpeechToTextError.noSpeechDetected }
+                return cleaned
             }
         } catch {
-            // Pass through model-not-ready distinctly so UI can redirect to Settings
+            // Pass through model-not-ready and no-speech distinctly
             if let pe = error as? ParakeetError, pe == .modelNotReady {
                 throw pe
             }
+            if error is SpeechToTextError { throw error }
             throw SpeechToTextError.transcriptionFailed("Parakeet error: \(error.localizedDescription)")
         }
     }
@@ -474,11 +491,14 @@ internal class SpeechToTextService {
         _ = try UvBootstrap.ensureVenv(userPython: nil)
         do {
             let text = try await gemmaService.transcribe(audioFileURL: audioURL)
-            return Self.cleanTranscriptionText(text)
+            let cleaned = Self.cleanTranscriptionText(text)
+            guard !cleaned.isEmpty else { throw SpeechToTextError.noSpeechDetected }
+            return cleaned
         } catch {
             if let ge = error as? GemmaError, ge == .modelNotReady {
                 throw ge
             }
+            if error is SpeechToTextError { throw error }
             throw SpeechToTextError.transcriptionFailed("Gemma error: \(error.localizedDescription)")
         }
     }
@@ -490,11 +510,14 @@ internal class SpeechToTextService {
         _ = try UvBootstrap.ensureVenv(userPython: nil)
         do {
             let text = try await whisperMLXService.transcribe(audioFileURL: audioURL)
-            return Self.cleanTranscriptionText(text)
+            let cleaned = Self.cleanTranscriptionText(text)
+            guard !cleaned.isEmpty else { throw SpeechToTextError.noSpeechDetected }
+            return cleaned
         } catch {
             if let we = error as? WhisperMLXError, we == .modelNotReady {
                 throw we
             }
+            if error is SpeechToTextError { throw error }
             throw SpeechToTextError.transcriptionFailed("Whisper MLX error: \(error.localizedDescription)")
         }
     }

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Typed Notification Names
 
-internal extension Notification.Name {
+extension Notification.Name {
     // MARK: - Settings and Configuration
     static let pressAndHoldSettingsChanged = Notification.Name("PressAndHoldSettingsChanged")
 
@@ -10,4 +10,5 @@ internal extension Notification.Name {
     static let recordingStopped = Notification.Name("RecordingStopped")
     static let transcriptionStarted = Notification.Name("TranscriptionStarted")
     static let transcriptionCompleted = Notification.Name("TranscriptionCompleted")
+    static let transcriptionFailed = Notification.Name("TranscriptionFailed")
 }

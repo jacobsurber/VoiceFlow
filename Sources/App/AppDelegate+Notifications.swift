@@ -1,6 +1,6 @@
 import AppKit
 
-internal extension AppDelegate {
+extension AppDelegate {
     func setupNotificationObservers() {
         NotificationCenter.default.addObserver(
             self,
@@ -20,6 +20,13 @@ internal extension AppDelegate {
             self,
             selector: #selector(onTranscriptionCompleted),
             name: .transcriptionCompleted,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onTranscriptionCompleted),
+            name: .transcriptionFailed,
             object: nil
         )
 
