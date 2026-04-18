@@ -127,6 +127,7 @@ whisp_sign_app_bundle() {
   local entitlements_path="$2"
   local nested_binary_path="$3"
   local identity="${4:-}"
+  local bundle_identifier="${5:-com.whisp.app}"
   local sign_target="${identity:--}"
 
   if [ -f "$nested_binary_path" ]; then
@@ -138,7 +139,7 @@ whisp_sign_app_bundle() {
   fi
 
   if [ "$sign_target" = "-" ]; then
-    codesign --force --deep --sign - --identifier "com.whisp.app" "$app_path"
+    codesign --force --deep --sign - --identifier "$bundle_identifier" "$app_path"
   else
     codesign --force --deep --sign "$sign_target" --options runtime --entitlements "$entitlements_path" "$app_path"
   fi

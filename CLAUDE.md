@@ -14,13 +14,13 @@ swift test --filter AudioRecorderTests # Run single test suite
 # Release workflow
 make install          # Build, sign, install to /Applications/
 make build            # Universal binary app bundle
-make build-notarize   # Signed + notarized (requires env vars below)
+make build-notarize   # Signed + notarized app bundles (Developer ID + env vars required)
 make test             # Run tests via scripts/run-tests.sh
-make dmg              # Create DMG for distribution
+make dmg              # Create a local DMG from the built app bundles
 make clean            # Remove .build/, Whisp.app, zips, dmgs
 make reset-permissions   # Reset accessibility permissions (fixes Smart Paste after rebuild)
 make setup-local-signing # Create persistent signing identity so permissions survive rebuilds
-make release            # Create new GitHub release (requires clean working tree)
+make release            # Build notarized DMG and create a GitHub release (requires clean tree, Developer ID, and env vars)
 ```
 
 ### Notarization Env Vars
@@ -31,9 +31,11 @@ export WHISP_APPLE_PASSWORD='app-specific-password'
 export WHISP_TEAM_ID='your-team-id'
 ```
 
+Notarized builds also require a `Developer ID Application` certificate in Keychain. Set `CODE_SIGN_IDENTITY` if you need to choose a specific signing identity.
+
 ## Architecture
 
-```
+```text
 Sources/
 ├── App/              # Entry point (AudioWhisperApp.swift), AppDelegate + extensions,
 │                     #   AppDefaults, AppStatus, AppEnvironment, AppSetupHelper,

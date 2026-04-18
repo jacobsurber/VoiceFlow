@@ -30,7 +30,7 @@ Supports multiple transcription engines: OpenAI Whisper, Google Gemini, local Wh
 2. Drag Whisp.app to your Applications folder
 3. Launch and configure through the Dashboard
 
-> **Note:** The app is ad-hoc signed. On first launch, right-click the app and select **Open**, then confirm the dialog. You only need to do this once.
+> **Note:** GitHub release DMGs are signed and notarized. If you build locally with ad-hoc signing instead, right-click the app and select **Open** on first launch.
 
 ### Build from Source
 
@@ -98,18 +98,19 @@ Configure the trigger key and mode in Dashboard > Recording.
 
 ## Building
 
-| Command               | Description                                           |
-| --------------------- | ----------------------------------------------------- |
-| `make install`        | Build and install to /Applications/                   |
-| `make build`          | Build the app bundle                                  |
-| `make build-notarize` | Build and notarize (requires Apple Developer account) |
-| `make test`           | Run test suite                                        |
-| `make dmg`            | Create DMG for distribution                           |
-| `make clean`          | Remove build artifacts                                |
+| Command               | Description                                                              |
+| --------------------- | ------------------------------------------------------------------------ |
+| `make install`        | Build and install to /Applications/                                      |
+| `make build`          | Build the app bundle                                                     |
+| `make build-notarize` | Build and notarize both app bundles, Developer ID required               |
+| `make test`           | Run test suite                                                           |
+| `make dmg`            | Create local DMG from current app bundles                                |
+| `make release`        | Build notarized DMG, checksum, and GitHub release, Developer ID required |
+| `make clean`          | Remove build artifacts                                                   |
 
 ### Notarization
 
-For distribution without Gatekeeper warnings, set these environment variables and run `make build-notarize`:
+For distribution without Gatekeeper warnings, you need a `Developer ID Application` certificate available in Keychain. If you need to choose one explicitly, set `CODE_SIGN_IDENTITY` first. Then set these environment variables and run `make build-notarize`. To publish a release, `make release` uses the same credentials to notarize the DMG before uploading it to GitHub Releases:
 
 ```bash
 export WHISP_APPLE_ID='your-apple-id@example.com'

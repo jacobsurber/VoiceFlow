@@ -15,9 +15,9 @@ jobs:
   build-and-release:
     runs-on: macos-15
     env:
-      APP_NAME: Whisp
-      APP_BUNDLE: Whisp.app
-      BINARY: .build/apple/Products/Release/Whisp
+      WHISP_APPLE_ID: ${{ secrets.APPLE_ID }}
+      WHISP_APPLE_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+      WHISP_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
     steps:
       - name: Checkout
@@ -66,190 +66,85 @@ jobs:
           echo "✅ Developer ID certificate imported: $IDENTITY"
 
       - name: Resolve release version
+        id: release_version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           FILE_VERSION="$(cat VERSION | tr -d '[:space:]')"
           TAG="v$FILE_VERSION"
+          CURRENT_COMMIT="$(git rev-parse HEAD)"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "ℹ️ Release $TAG already exists. Skipping."
+            echo "version=$FILE_VERSION" >> "$GITHUB_OUTPUT"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if git tag -l "$TAG" | grep -q "$TAG"; then
-            echo "ℹ️ Tag $TAG already exists — auto-bumping patch version"
-            MAJOR=$(echo "$FILE_VERSION" | cut -d. -f1)
-            MINOR=$(echo "$FILE_VERSION" | cut -d. -f2)
-            PATCH=$(echo "$FILE_VERSION" | cut -d. -f3)
-            PATCH=$((PATCH + 1))
-            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-            while git tag -l "v$NEW_VERSION" | grep -q "v$NEW_VERSION"; do
-              PATCH=$((PATCH + 1))
-              NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-            done
-            echo "VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
-            echo "🚀 Auto-bumped to $NEW_VERSION"
-          else
-            echo "VERSION=$FILE_VERSION" >> "$GITHUB_ENV"
-            echo "🚀 Will release $TAG"
+            TAG_COMMIT="$(git rev-list -n 1 "$TAG")"
+            if [ "$TAG_COMMIT" != "$CURRENT_COMMIT" ]; then
+              echo "❌ Tag $TAG already exists at $TAG_COMMIT, but HEAD is $CURRENT_COMMIT. Bump VERSION in source before releasing."
+              exit 1
+            fi
+            echo "ℹ️ Tag $TAG already exists without a GitHub release. Resuming release publish."
           fi
+
+          VERSION="$FILE_VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "🚀 Will release $TAG"
 
       - name: Run tests
+        if: steps.release_version.outputs.should_release == 'true'
         run: swift test
 
-      - name: Build universal binary
+      - name: Require Developer ID certificate
+        if: steps.release_version.outputs.should_release == 'true'
         run: |
-          swift build -c release --arch arm64 --arch x86_64 2>&1 || true
-          if [ ! -f "$BINARY" ]; then
-            echo "❌ Binary not found at $BINARY"
+          if [ -z "${SIGNING_IDENTITY:-}" ]; then
+            echo "❌ Release workflow requires a Developer ID Application certificate"
+            echo "   Configure DEVELOPER_ID_CERT_BASE64 and DEVELOPER_ID_CERT_PASSWORD secrets."
             exit 1
           fi
-          echo "✅ Binary built: $(file "$BINARY")"
+          echo "✅ Using Developer ID certificate: $SIGNING_IDENTITY"
 
-      - name: Create app bundle
-        run: |
-          GIT_HASH=$(git rev-parse HEAD)
-          BUILD_DATE=$(date '+%Y-%m-%d')
-          BUILD_NUMBER="${VERSION//./}"
+      - name: Build notarized app bundles
+        if: steps.release_version.outputs.should_release == 'true'
+        run: CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" ./scripts/build.sh --notarize
 
-          # Generate VersionInfo.swift
-          sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" \
-              -e "s/GIT_HASH_PLACEHOLDER/$GIT_HASH/g" \
-              -e "s/BUILD_DATE_PLACEHOLDER/$BUILD_DATE/g" \
-              Sources/VersionInfo.swift.template > Sources/Utilities/VersionInfo.swift
+      - name: Create notarized DMG
+        if: steps.release_version.outputs.should_release == 'true'
+        run: ./scripts/create-dmg.sh --notarize
 
-          # Clean previous binary so stale artifacts can't mask a rebuild failure
-          rm -f "$BINARY"
-
-          # Rebuild with correct version info
-          swift build -c release --arch arm64 --arch x86_64 2>&1 || true
-          if [ ! -f "$BINARY" ]; then
-            echo "❌ Rebuild failed — binary not found"
-            exit 1
-          fi
-
-          # Create bundle structure
-          mkdir -p "$APP_BUNDLE/Contents/"{MacOS,Resources,Resources/bin}
-
-          cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/"
-          chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
-
-          # Copy SwiftPM-processed resource bundles (Assets.xcassets, etc.)
-          find .build/apple/Products/Release -maxdepth 1 -type d -name "*.bundle" -print0 | while IFS= read -r -d '' bundle; do
-            cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
-          done
-
-          # Copy additional resources
-          [ -f Sources/Resources/DashboardLogo.jpg ] && cp Sources/Resources/DashboardLogo.jpg "$APP_BUNDLE/Contents/Resources/"
-          [ -f Sources/verify_parakeet.py ] && cp Sources/verify_parakeet.py "$APP_BUNDLE/Contents/Resources/"
-          [ -f Sources/ml_daemon.py ] && cp Sources/ml_daemon.py "$APP_BUNDLE/Contents/Resources/"
-          [ -d Sources/ml ] && cp -R Sources/ml "$APP_BUNDLE/Contents/Resources/" && find "$APP_BUNDLE/Contents/Resources/ml" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-          [ -f Sources/Resources/pyproject.toml ] && cp Sources/Resources/pyproject.toml "$APP_BUNDLE/Contents/Resources/"
-
-          if [ -f WhispIcon.png ]; then
-            bash scripts/generate-icons.sh
-            if command -v iconutil >/dev/null 2>&1 && [ -d Whisp.iconset ]; then
-              iconutil -c icns Whisp.iconset -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-            else
-              echo "⚠️ Could not generate AppIcon.icns"
-            fi
-            rm -rf Whisp.iconset
-          else
-            echo "⚠️ WhispIcon.png not found, release app will use default icon"
-          fi
-
-          # Reuse repo Info.plist and patch build variables + version fields
-          cp Info.plist "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDevelopmentRegion en" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $APP_NAME" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 14.0" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
-          # Add icon key if missing
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP_BUNDLE/Contents/Info.plist" 2>/dev/null || \
-            /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$APP_BUNDLE/Contents/Info.plist"
-          plutil -lint "$APP_BUNDLE/Contents/Info.plist"
-
-          # Ad-hoc sign for distribution (notarize locally if needed)
-          cat > /tmp/entitlements.plist <<EOF2
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>com.apple.security.device.audio-input</key><true/>
-              <key>com.apple.security.network.client</key><true/>
-          </dict>
-          </plist>
-          EOF2
-
-          # Sign with Developer ID if available, otherwise ad-hoc
-          if [ -n "${SIGNING_IDENTITY:-}" ]; then
-            echo "🔏 Signing with Developer ID..."
-            codesign --force --deep --options runtime \
-              --entitlements /tmp/entitlements.plist \
-              --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"
-          else
-            echo "⚠️ No Developer ID — using ad-hoc signing"
-            codesign --force --deep --options runtime \
-              --entitlements /tmp/entitlements.plist \
-              --sign - "$APP_BUNDLE"
-          fi
-
-          codesign --verify --verbose "$APP_BUNDLE"
-
-      - name: Notarize app
-        if: env.SIGNING_IDENTITY != ''
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          echo "📤 Submitting for notarization..."
-          ditto -c -k --keepParent "$APP_BUNDLE" "$APP_BUNDLE.zip"
-
-          xcrun notarytool submit "$APP_BUNDLE.zip" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_ID_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
-
-          echo "📎 Stapling notarization ticket..."
-          xcrun stapler staple "$APP_BUNDLE"
-
-          rm -f "$APP_BUNDLE.zip"
-          echo "✅ App notarized and stapled"
-
-      - name: Create zip
-        run: zip -r "${APP_NAME}-${VERSION}.zip" "$APP_BUNDLE"
-
-      - name: Create DMG
-        run: |
-          STAGING=$(mktemp -d)
-          cp -R "$APP_BUNDLE" "$STAGING/"
-          ln -s /Applications "$STAGING/Applications"
-          hdiutil create \
-            -volname "$APP_NAME" \
-            -srcfolder "$STAGING" \
-            -ov -format UDZO \
-            "${APP_NAME}-${VERSION}.dmg"
-          rm -rf "$STAGING"
+      - name: Create checksum
+        if: steps.release_version.outputs.should_release == 'true'
+        run: shasum -a 256 "Whisp-${{ steps.release_version.outputs.version }}.dmg" >
+          "Whisp-${{ steps.release_version.outputs.version }}.dmg.sha256"
 
       - name: Create tag and GitHub Release
+        if: steps.release_version.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v$VERSION"
-          git tag "$TAG"
-          git push origin "$TAG"
+          if ! git tag -l "$TAG" | grep -q "$TAG"; then
+            git tag "$TAG"
+          fi
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git push origin "$TAG"
+          fi
 
           cat > /tmp/release-notes.md <<'NOTES'
           ## Installation
 
           1. Download the `.dmg` file below and drag **Whisp.app** into `/Applications/`.
-          2. Whisp is open-source and not signed with an Apple Developer ID, so macOS will block the app on first launch. Run this once to allow it:
-             ```bash
-             sudo xattr -cr /Applications/Whisp.app
-             ```
+          2. The DMG also includes **Uninstall Whisp.app** if you want a full cleanup later.
           3. Open Whisp from `/Applications/`. On first launch, grant the requested permissions:
              - **Microphone** — for voice recording
              - **Accessibility** — for Smart Paste
              - **Input Monitoring** — for the global hotkey
-
-          > You only need to run the `xattr` command once per download. Permissions persist across app restarts.
 
           NOTES
 
@@ -263,7 +158,8 @@ jobs:
           fi
 
           gh release create "$TAG" \
-            "${APP_NAME}-${VERSION}.zip" \
-            "${APP_NAME}-${VERSION}.dmg" \
-            --title "$APP_NAME $VERSION" \
+            "Whisp-${{ steps.release_version.outputs.version }}.dmg" \
+            "Whisp-${{ steps.release_version.outputs.version }}.dmg.sha256" \
+            --verify-tag \
+            --title "Whisp ${{ steps.release_version.outputs.version }}" \
             --notes-file /tmp/release-notes.md
