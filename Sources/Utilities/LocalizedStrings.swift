@@ -104,6 +104,16 @@ internal enum LocalizedStrings {
             value: "Recording appears to be corrupted. Please try recording again.",
             comment: "Error when audio file URL is invalid")
 
+        static let recordingTooShort = NSLocalizedString(
+            "errors.recording_too_short",
+            value: "Recording too short.",
+            comment: "Error when a recording is too short to transcribe reliably")
+
+        static let noSpeechDetected = NSLocalizedString(
+            "errors.no_speech_detected",
+            value: "No speech detected.",
+            comment: "Error when no speech is detected in the recording")
+
         static let apiKeyMissing = NSLocalizedString(
             "errors.api_key_missing",
             value: "To use %@ transcription, please add your API key in Settings (⌘,).",

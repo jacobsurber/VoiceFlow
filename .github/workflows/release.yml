@@ -2,22 +2,41 @@ name: Release
 
 on:
   push:
-    branches:
-      - master
-    paths-ignore:
-      - "*.md"
-      - "LICENSE"
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump to apply when version is not provided
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: Optional explicit version in x.y.z format
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   build-and-release:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.actor !=
+      'github-actions[bot]' }}
     runs-on: macos-15
     env:
-      APP_NAME: Whisp
-      APP_BUNDLE: Whisp.app
-      BINARY: .build/apple/Products/Release/Whisp
+      WHISP_APPLE_ID: ${{ secrets.APPLE_ID }}
+      WHISP_APPLE_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+      WHISP_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      DEVELOPER_ID_CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+      DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -25,18 +44,65 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Require master branch
+        run: |
+          if [ "$GITHUB_REF_NAME" != "master" ]; then
+            echo "❌ Run this workflow from master so the VERSION bump lands on the release branch."
+            exit 1
+          fi
+
+      - name: Determine release packaging mode
+        id: release_mode
+        run: |
+          have_cert_secrets=false
+          have_notary_credentials=false
+
+          if [ -n "${DEVELOPER_ID_CERT_BASE64:-}" ] && [ -n "${DEVELOPER_ID_CERT_PASSWORD:-}" ]; then
+            have_cert_secrets=true
+          elif [ -n "${DEVELOPER_ID_CERT_BASE64:-}" ] || [ -n "${DEVELOPER_ID_CERT_PASSWORD:-}" ]; then
+            echo "::warning::Developer ID certificate secrets are only partially configured. Falling back to the unsigned release path."
+          fi
+
+          if [ -n "${WHISP_APPLE_ID:-}" ] && [ -n "${WHISP_APPLE_PASSWORD:-}" ] && [ -n "${WHISP_TEAM_ID:-}" ]; then
+            have_notary_credentials=true
+          elif [ -n "${WHISP_APPLE_ID:-}" ] || [ -n "${WHISP_APPLE_PASSWORD:-}" ] || [ -n "${WHISP_TEAM_ID:-}" ]; then
+            echo "::warning::Apple notarization secrets are only partially configured. Falling back to a non-notarized release."
+          fi
+
+          if [ "$have_cert_secrets" = true ] && [ "$have_notary_credentials" = true ]; then
+            mode=notarized
+            use_developer_id=true
+            include_zip=false
+            echo "✅ Release mode: notarized DMG"
+          elif [ "$have_cert_secrets" = true ]; then
+            mode=signed
+            use_developer_id=true
+            include_zip=true
+            echo "::warning::Apple notarization credentials are missing. Publishing a Developer ID signed but unnotarized release."
+          else
+            mode=adhoc
+            use_developer_id=false
+            include_zip=true
+            if [ "$have_notary_credentials" = true ]; then
+              echo "::warning::Apple notarization credentials are present, but the Developer ID certificate secrets are missing. Publishing an ad-hoc signed release instead."
+            else
+              echo "::warning::No Apple release credentials are configured. Publishing an ad-hoc signed release."
+            fi
+          fi
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "use_developer_id=$use_developer_id" >> "$GITHUB_OUTPUT"
+          echo "include_zip=$include_zip" >> "$GITHUB_OUTPUT"
+
       - name: Import Developer ID certificate
-        if: env.DEVELOPER_ID_CERT_BASE64 != ''
-        env:
-          DEVELOPER_ID_CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
-          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        if: ${{ steps.release_mode.outputs.use_developer_id == 'true' }}
         run: |
           CERT_PATH="$RUNNER_TEMP/dev-id-cert.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
 
           # Decode certificate
-          echo "$DEVELOPER_ID_CERT_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$DEVELOPER_ID_CERT_BASE64" | base64 -D > "$CERT_PATH"
 
           # Create and configure temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -66,192 +132,285 @@ jobs:
           echo "✅ Developer ID certificate imported: $IDENTITY"
 
       - name: Resolve release version
+        id: release_version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version ||
+            '' }}
+          BUMP_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.bump ||
+            'patch' }}
         run: |
+          version_gt() {
+            local left="$1"
+            local right="$2"
+            local left_major left_minor left_patch right_major right_minor right_patch
+
+            IFS='.' read -r left_major left_minor left_patch <<< "$left"
+            IFS='.' read -r right_major right_minor right_patch <<< "$right"
+
+            for pair in \
+              "${left_major:-0} ${right_major:-0}" \
+              "${left_minor:-0} ${right_minor:-0}" \
+              "${left_patch:-0} ${right_patch:-0}"; do
+              set -- $pair
+              if ((10#$1 > 10#$2)); then
+                return 0
+              fi
+              if ((10#$1 < 10#$2)); then
+                return 1
+              fi
+            done
+
+            return 1
+          }
+
+          version_lt() {
+            version_gt "$2" "$1"
+          }
+
           FILE_VERSION="$(cat VERSION | tr -d '[:space:]')"
-          TAG="v$FILE_VERSION"
+          LATEST_TAG="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1 || true)"
+          BASE_VERSION="$FILE_VERSION"
+          CURRENT_COMMIT="$(git rev-parse HEAD)"
+          SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
+          LATEST_TAG_VERSION=""
+
+          if [ -n "$LATEST_TAG" ]; then
+            LATEST_TAG_VERSION="${LATEST_TAG#v}"
+            if ! [[ "$LATEST_TAG_VERSION" =~ $SEMVER_REGEX ]]; then
+              echo "❌ Latest release tag $LATEST_TAG is not a supported semantic version"
+              exit 1
+            fi
+            if version_gt "$LATEST_TAG_VERSION" "$BASE_VERSION"; then
+              BASE_VERSION="$LATEST_TAG_VERSION"
+            fi
+          fi
+
+          if [ -n "$INPUT_VERSION" ]; then
+            if ! [[ "$INPUT_VERSION" =~ $SEMVER_REGEX ]]; then
+              echo "❌ version input must use x.y.z format"
+              exit 1
+            fi
+            if version_lt "$INPUT_VERSION" "$BASE_VERSION"; then
+              echo "❌ version input $INPUT_VERSION is older than current source/release version $BASE_VERSION"
+              exit 1
+            fi
+            VERSION="$INPUT_VERSION"
+          elif [ -n "$LATEST_TAG_VERSION" ] && version_gt "$FILE_VERSION" "$LATEST_TAG_VERSION"; then
+            VERSION="$FILE_VERSION"
+            echo "ℹ️ VERSION already leads the latest tag. Reusing pending source version $VERSION."
+          else
+            if ! [[ "$BASE_VERSION" =~ $SEMVER_REGEX ]]; then
+              echo "❌ Cannot derive a semantic version from VERSION=$FILE_VERSION and latest tag=${LATEST_TAG:-none}"
+              exit 1
+            fi
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+            case "$BUMP_TYPE" in
+              major)
+                VERSION="$((MAJOR + 1)).0.0"
+                ;;
+              minor)
+                VERSION="$MAJOR.$((MINOR + 1)).0"
+                ;;
+              patch)
+                VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+                ;;
+              *)
+                echo "❌ Unsupported bump type: $BUMP_TYPE"
+                exit 1
+                ;;
+            esac
+          fi
+
+          TAG="v$VERSION"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "❌ Release $TAG already exists. Choose a newer version or different bump type."
+            exit 1
+          fi
 
           if git tag -l "$TAG" | grep -q "$TAG"; then
-            echo "ℹ️ Tag $TAG already exists — auto-bumping patch version"
-            MAJOR=$(echo "$FILE_VERSION" | cut -d. -f1)
-            MINOR=$(echo "$FILE_VERSION" | cut -d. -f2)
-            PATCH=$(echo "$FILE_VERSION" | cut -d. -f3)
-            PATCH=$((PATCH + 1))
-            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-            while git tag -l "v$NEW_VERSION" | grep -q "v$NEW_VERSION"; do
-              PATCH=$((PATCH + 1))
-              NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-            done
-            echo "VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
-            echo "🚀 Auto-bumped to $NEW_VERSION"
-          else
-            echo "VERSION=$FILE_VERSION" >> "$GITHUB_ENV"
-            echo "🚀 Will release $TAG"
+            TAG_COMMIT="$(git rev-list -n 1 "$TAG")"
+            if [ "$FILE_VERSION" != "$VERSION" ]; then
+              echo "❌ Tag $TAG already exists, but VERSION is still $FILE_VERSION. Update VERSION in source to resume that release."
+              exit 1
+            fi
+            if [ "$TAG_COMMIT" != "$CURRENT_COMMIT" ]; then
+              echo "❌ Tag $TAG already exists at $TAG_COMMIT, but HEAD is $CURRENT_COMMIT."
+              exit 1
+            fi
+            echo "ℹ️ Tag $TAG already exists without a GitHub release. Resuming release publish."
           fi
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "source_version=$FILE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "🚀 Prepared release $TAG"
 
       - name: Run tests
         run: swift test
 
-      - name: Build universal binary
+      - name: Require Developer ID certificate
+        if: ${{ steps.release_mode.outputs.use_developer_id == 'true' }}
         run: |
-          swift build -c release --arch arm64 --arch x86_64 2>&1 || true
-          if [ ! -f "$BINARY" ]; then
-            echo "❌ Binary not found at $BINARY"
+          if [ -z "${SIGNING_IDENTITY:-}" ]; then
+            echo "❌ Release workflow requires a Developer ID Application certificate"
+            echo "   Configure DEVELOPER_ID_CERT_BASE64 and DEVELOPER_ID_CERT_PASSWORD secrets."
             exit 1
           fi
-          echo "✅ Binary built: $(file "$BINARY")"
+          echo "✅ Using Developer ID certificate: $SIGNING_IDENTITY"
 
-      - name: Create app bundle
+      - name: Build release app bundles
         run: |
-          GIT_HASH=$(git rev-parse HEAD)
-          BUILD_DATE=$(date '+%Y-%m-%d')
-          BUILD_NUMBER="${VERSION//./}"
+          case "${{ steps.release_mode.outputs.mode }}" in
+            notarized)
+              WHISP_VERSION="${{ steps.release_version.outputs.version }}" \
+              CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+              ./scripts/build.sh --notarize
+              ;;
+            signed)
+              WHISP_VERSION="${{ steps.release_version.outputs.version }}" \
+              CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+              ./scripts/build.sh
+              ;;
+            adhoc)
+              WHISP_VERSION="${{ steps.release_version.outputs.version }}" \
+              ./scripts/build.sh
+              ;;
+            *)
+              echo "❌ Unknown release mode: ${{ steps.release_mode.outputs.mode }}"
+              exit 1
+              ;;
+          esac
 
-          # Generate VersionInfo.swift
-          sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" \
-              -e "s/GIT_HASH_PLACEHOLDER/$GIT_HASH/g" \
-              -e "s/BUILD_DATE_PLACEHOLDER/$BUILD_DATE/g" \
-              Sources/VersionInfo.swift.template > Sources/Utilities/VersionInfo.swift
-
-          # Clean previous binary so stale artifacts can't mask a rebuild failure
-          rm -f "$BINARY"
-
-          # Rebuild with correct version info
-          swift build -c release --arch arm64 --arch x86_64 2>&1 || true
-          if [ ! -f "$BINARY" ]; then
-            echo "❌ Rebuild failed — binary not found"
-            exit 1
-          fi
-
-          # Create bundle structure
-          mkdir -p "$APP_BUNDLE/Contents/"{MacOS,Resources,Resources/bin}
-
-          cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/"
-          chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
-
-          # Copy SwiftPM-processed resource bundles (Assets.xcassets, etc.)
-          find .build/apple/Products/Release -maxdepth 1 -type d -name "*.bundle" -print0 | while IFS= read -r -d '' bundle; do
-            cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
-          done
-
-          # Copy additional resources
-          [ -f Sources/Resources/DashboardLogo.jpg ] && cp Sources/Resources/DashboardLogo.jpg "$APP_BUNDLE/Contents/Resources/"
-          [ -f Sources/verify_parakeet.py ] && cp Sources/verify_parakeet.py "$APP_BUNDLE/Contents/Resources/"
-          [ -f Sources/ml_daemon.py ] && cp Sources/ml_daemon.py "$APP_BUNDLE/Contents/Resources/"
-          [ -d Sources/ml ] && cp -R Sources/ml "$APP_BUNDLE/Contents/Resources/" && find "$APP_BUNDLE/Contents/Resources/ml" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-          [ -f Sources/Resources/pyproject.toml ] && cp Sources/Resources/pyproject.toml "$APP_BUNDLE/Contents/Resources/"
-
-          if [ -f WhispIcon.png ]; then
-            bash scripts/generate-icons.sh
-            if command -v iconutil >/dev/null 2>&1 && [ -d Whisp.iconset ]; then
-              iconutil -c icns Whisp.iconset -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-            else
-              echo "⚠️ Could not generate AppIcon.icns"
-            fi
-            rm -rf Whisp.iconset
+      - name: Create release DMG
+        run: |
+          if [ "${{ steps.release_mode.outputs.mode }}" = "notarized" ]; then
+            WHISP_VERSION="${{ steps.release_version.outputs.version }}" \
+            ./scripts/create-dmg.sh --notarize
           else
-            echo "⚠️ WhispIcon.png not found, release app will use default icon"
+            WHISP_VERSION="${{ steps.release_version.outputs.version }}" \
+            ./scripts/create-dmg.sh
           fi
 
-          # Reuse repo Info.plist and patch build variables + version fields
-          cp Info.plist "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDevelopmentRegion en" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $APP_NAME" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 14.0" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_BUNDLE/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
-          # Add icon key if missing
-          /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP_BUNDLE/Contents/Info.plist" 2>/dev/null || \
-            /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$APP_BUNDLE/Contents/Info.plist"
-          plutil -lint "$APP_BUNDLE/Contents/Info.plist"
+      - name: Create fallback app zip
+        if: ${{ steps.release_mode.outputs.include_zip == 'true' }}
+        run: |
+          ditto -c -k --keepParent "Whisp.app" "Whisp-${{ steps.release_version.outputs.version }}.zip"
 
-          # Ad-hoc sign for distribution (notarize locally if needed)
-          cat > /tmp/entitlements.plist <<EOF2
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>com.apple.security.device.audio-input</key><true/>
-              <key>com.apple.security.network.client</key><true/>
-          </dict>
-          </plist>
-          EOF2
+      - name: Create checksum
+        run: |
+          shasum -a 256 "Whisp-${{ steps.release_version.outputs.version }}.dmg" \
+            > "Whisp-${{ steps.release_version.outputs.version }}.dmg.sha256"
 
-          # Sign with Developer ID if available, otherwise ad-hoc
-          if [ -n "${SIGNING_IDENTITY:-}" ]; then
-            echo "🔏 Signing with Developer ID..."
-            codesign --force --deep --options runtime \
-              --entitlements /tmp/entitlements.plist \
-              --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"
-          else
-            echo "⚠️ No Developer ID — using ad-hoc signing"
-            codesign --force --deep --options runtime \
-              --entitlements /tmp/entitlements.plist \
-              --sign - "$APP_BUNDLE"
-          fi
-
-          codesign --verify --verbose "$APP_BUNDLE"
-
-      - name: Notarize app
-        if: env.SIGNING_IDENTITY != ''
+      - name: Commit release version
+        id: commit_release_version
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          echo "📤 Submitting for notarization..."
-          ditto -c -k --keepParent "$APP_BUNDLE" "$APP_BUNDLE.zip"
+          TARGET_VERSION="${{ steps.release_version.outputs.version }}"
+          FILE_VERSION="$(cat VERSION | tr -d '[:space:]')"
+          CURRENT_COMMIT="$(git rev-parse HEAD)"
+          REMOTE_HEAD="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          SHOULD_PUBLISH=true
 
-          xcrun notarytool submit "$APP_BUNDLE.zip" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_ID_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
+          if [ -n "$REMOTE_HEAD" ] && [ "$REMOTE_HEAD" != "$CURRENT_COMMIT" ]; then
+            if [ "$EVENT_NAME" = "push" ]; then
+              echo "ℹ️ origin/$GITHUB_REF_NAME advanced during this run. Skipping publish because a newer push-triggered release run should ship the latest master commit."
+              SHOULD_PUBLISH=false
+            else
+              echo "❌ origin/$GITHUB_REF_NAME advanced during this run. Re-run the release workflow from the latest master commit."
+              exit 1
+            fi
+          fi
 
-          echo "📎 Stapling notarization ticket..."
-          xcrun stapler staple "$APP_BUNDLE"
+          if [ "$SHOULD_PUBLISH" = "true" ] && [ "$FILE_VERSION" != "$TARGET_VERSION" ]; then
+            printf '%s\n' "$TARGET_VERSION" > VERSION
 
-          rm -f "$APP_BUNDLE.zip"
-          echo "✅ App notarized and stapled"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add VERSION
+            git commit -m "chore: bump VERSION to $TARGET_VERSION for release"
+            git push origin "HEAD:$GITHUB_REF_NAME"
 
-      - name: Create zip
-        run: zip -r "${APP_NAME}-${VERSION}.zip" "$APP_BUNDLE"
+            CURRENT_COMMIT="$(git rev-parse HEAD)"
+            echo "✅ Bumped VERSION to $TARGET_VERSION in commit $CURRENT_COMMIT"
+          elif [ "$SHOULD_PUBLISH" = "true" ]; then
+            echo "ℹ️ VERSION already set to $TARGET_VERSION"
+          fi
 
-      - name: Create DMG
-        run: |
-          STAGING=$(mktemp -d)
-          cp -R "$APP_BUNDLE" "$STAGING/"
-          ln -s /Applications "$STAGING/Applications"
-          hdiutil create \
-            -volname "$APP_NAME" \
-            -srcfolder "$STAGING" \
-            -ov -format UDZO \
-            "${APP_NAME}-${VERSION}.dmg"
-          rm -rf "$STAGING"
+          echo "should_publish=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
+          if [ "$SHOULD_PUBLISH" = "true" ]; then
+            echo "commit_sha=$CURRENT_COMMIT" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create tag and GitHub Release
+        if: ${{ steps.commit_release_version.outputs.should_publish == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v$VERSION"
-          git tag "$TAG"
-          git push origin "$TAG"
+          if ! git tag -l "$TAG" | grep -q "$TAG"; then
+            git tag "$TAG" "${{ steps.commit_release_version.outputs.commit_sha }}"
+          fi
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git push origin "$TAG"
+          fi
 
-          cat > /tmp/release-notes.md <<'NOTES'
+           cat > /tmp/release-notes.md <<'NOTES'
           ## Installation
 
           1. Download the `.dmg` file below and drag **Whisp.app** into `/Applications/`.
-          2. Whisp is open-source and not signed with an Apple Developer ID, so macOS will block the app on first launch. Run this once to allow it:
-             ```bash
-             sudo xattr -cr /Applications/Whisp.app
-             ```
-          3. Open Whisp from `/Applications/`. On first launch, grant the requested permissions:
+          2. The DMG also includes **Uninstall Whisp.app** if you want a full cleanup later.
+
+          NOTES
+
+           case "${{ steps.release_mode.outputs.mode }}" in
+            notarized)
+              cat >> /tmp/release-notes.md <<'NOTES'
+           3. Open Whisp from `/Applications/`. On first launch, grant the requested permissions:
              - **Microphone** — for voice recording
              - **Accessibility** — for Smart Paste
              - **Input Monitoring** — for the global hotkey
 
-          > You only need to run the `xattr` command once per download. Permissions persist across app restarts.
+           NOTES
+              ;;
+            signed)
+              cat >> /tmp/release-notes.md <<'NOTES'
+           3. This build is signed with a Developer ID certificate but is not notarized. If macOS blocks it on first launch, run this once:
+             ```bash
+             sudo xattr -cr /Applications/Whisp.app
+             ```
+           4. Open Whisp from `/Applications/`. On first launch, grant the requested permissions:
+             - **Microphone** — for voice recording
+             - **Accessibility** — for Smart Paste
+             - **Input Monitoring** — for the global hotkey
 
-          NOTES
+           > You only need to run the `xattr` command once per download. Permissions persist across app restarts.
+
+           NOTES
+              ;;
+            adhoc)
+              cat >> /tmp/release-notes.md <<'NOTES'
+           3. Whisp is open-source and this build is not notarized. If macOS blocks it on first launch, run this once:
+             ```bash
+             sudo xattr -cr /Applications/Whisp.app
+             ```
+           4. Open Whisp from `/Applications/`. On first launch, grant the requested permissions:
+             - **Microphone** — for voice recording
+             - **Accessibility** — for Smart Paste
+             - **Input Monitoring** — for the global hotkey
+
+           > You only need to run the `xattr` command once per download. Permissions persist across app restarts.
+
+           NOTES
+              ;;
+            *)
+              echo "❌ Unknown release mode: ${{ steps.release_mode.outputs.mode }}"
+              exit 1
+              ;;
+           esac
 
           # Append auto-generated changelog
           PREV_TAG="$(git tag --sort=-v:refname | grep -v "^$TAG$" | head -1 || true)"
@@ -262,8 +421,18 @@ jobs:
               >> /tmp/release-notes.md 2>/dev/null || true
           fi
 
+          release_assets=(
+            "Whisp-${{ steps.release_version.outputs.version }}.dmg"
+            "Whisp-${{ steps.release_version.outputs.version }}.dmg.sha256"
+          )
+
+          if [ "${{ steps.release_mode.outputs.include_zip }}" = "true" ]; then
+            release_assets+=("Whisp-${{ steps.release_version.outputs.version }}.zip")
+          fi
+
           gh release create "$TAG" \
-            "${APP_NAME}-${VERSION}.zip" \
-            "${APP_NAME}-${VERSION}.dmg" \
-            --title "$APP_NAME $VERSION" \
+            "${release_assets[@]}" \
+            --verify-tag \
+            --target "${{ steps.commit_release_version.outputs.commit_sha }}" \
+            --title "Whisp ${{ steps.release_version.outputs.version }}" \
             --notes-file /tmp/release-notes.md

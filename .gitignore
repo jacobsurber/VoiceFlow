@@ -117,6 +117,7 @@ Temporary Items
 
 # App specific
 Whisp.app/
+Uninstall Whisp.app/
 Whisp.zip
 *.dmg
 notarization.log
@@ -139,3 +140,5 @@ Benchmarks/results/*
 !Benchmarks/results/.gitkeep
 !Benchmarks/results/README.md
 tasks/
+.venv/
+Uninstall Whisp.app/

@@ -9,6 +9,7 @@ import os.log
 @MainActor
 internal final class TranscriptionCoordinator {
     static let shared = TranscriptionCoordinator()
+    static let minimumRecordingDuration: TimeInterval = 0.35
 
     // Progress callback for UI updates (optional)
     var progressHandler: ((String) -> Void)?
@@ -41,6 +42,10 @@ internal final class TranscriptionCoordinator {
         // Ensure temp file cleanup on all exit paths (success or error)
         defer {
             try? FileManager.default.removeItem(at: audioURL)
+        }
+
+        if let sessionDuration, sessionDuration < Self.minimumRecordingDuration {
+            throw SpeechToTextError.recordingTooShort
         }
 
         progressHandler?("Preparing audio...")
