@@ -10,6 +10,10 @@ internal enum WhisperKitStorage {
     private static let modelsPathComponent = "models"
     private static let repositoryPath = "argmaxinc/whisperkit-coreml"
 
+    // Unified primary download base under app-managed storage.
+    // Legacy ~/Documents/huggingface and ~/Library/Application Support/Whisp/huggingface
+    // are still probed as read-only fallbacks for models that have not been migrated.
+
     // During download, the folder may exist with partial contents, so "is downloaded" checks for the
     // three required CoreML bundles with sentinel files. WhisperKit automatically downloads tokenizers
     // from HuggingFace Hub if not present locally.
@@ -141,6 +145,10 @@ internal enum WhisperKitStorage {
             return [URL(fileURLWithPath: override, isDirectory: true)]
         }
 
+        // Primary: unified app-managed location
+        let unifiedBase = ModelStoragePaths.whisperKitBase(fileManager: fileManager)
+
+        // Legacy fallbacks (read-only, for models that haven't been migrated yet)
         let documentsBase =
             (documentsDirectory
             ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first)?
@@ -150,7 +158,7 @@ internal enum WhisperKitStorage {
             ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first)?
             .appendingPathComponent(legacyHubBaseRelativePath, isDirectory: true)
 
-        return [documentsBase, legacyBase].compactMap { $0 }
+        return [unifiedBase, documentsBase, legacyBase].compactMap { $0 }
     }
 
     private static func candidateDownloadBases(

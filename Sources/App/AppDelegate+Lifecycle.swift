@@ -13,6 +13,11 @@ extension AppDelegate {
         // Ensure a single, consistent set of defaults before any UI/services read from UserDefaults/AppStorage.
         AppDefaults.register()
 
+        // Migrate model assets from legacy scattered locations into the unified
+        // ~/Documents/Models/ tree. Idempotent — skips if the migration sentinel
+        // already exists.
+        ModelStorageMigration.migrateIfNeeded()
+
         do {
             try DataManager.shared.initialize()
             Logger.app.info("DataManager initialized successfully")

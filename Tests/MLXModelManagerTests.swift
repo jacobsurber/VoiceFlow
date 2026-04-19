@@ -119,6 +119,14 @@ final class MLXModelManagerTests: XCTestCase {
         XCTAssertEqual(environment["HF_HUB_CACHE"], "\(cacheRoot.path)/hub")
     }
 
+    func testDefaultCacheDirectoryUsesUnifiedPath() {
+        let home = HuggingFaceCache.homeDirectory()
+        XCTAssertTrue(
+            home.path.contains("Documents/Models/HuggingFace"),
+            "Expected unified HuggingFace path, got: \(home.path)"
+        )
+    }
+
     func testOfflineModelLoadingEnvironmentRestoresPreviousValues() async throws {
         setenv("HF_HUB_OFFLINE", "0", 1)
         unsetenv("TRANSFORMERS_OFFLINE")

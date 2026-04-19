@@ -19,24 +19,31 @@ final class WhisperKitStorageTests: XCTestCase {
         super.tearDown()
     }
 
-    func testDownloadBaseDefaultsToDocumentsHuggingFaceBase() {
-        let documentsDirectory = URL(fileURLWithPath: "/tmp/whisp-documents", isDirectory: true)
-        let applicationSupportDirectory = URL(
-            fileURLWithPath: "/tmp/whisp-app-support", isDirectory: true)
+    func testDownloadBaseDefaultsToUnifiedWhisperKitBase() {
+        // The download base (where new downloads go) should always be the unified path
+        let downloadBase = WhisperKitStorage.downloadBaseDirectory()
 
-        let downloadBase = WhisperKitStorage.downloadBaseDirectory(
-            documentsDirectory: documentsDirectory,
-            applicationSupportDirectory: applicationSupportDirectory
+        XCTAssertNotNil(downloadBase)
+        XCTAssertTrue(
+            downloadBase!.path.contains("Documents/Models/WhisperKit"),
+            "Expected unified WhisperKit base, got: \(downloadBase!.path)"
         )
+    }
+
+    func testStorageDirectoryPrefersUnifiedBaseWhenNoLegacyModelsExist() {
+        // When using fake directories with no pre-existing models, unified should be first
+        let fakeDocuments = URL(fileURLWithPath: "/tmp/whisp-test-no-models-docs", isDirectory: true)
+        let fakeAppSupport = URL(fileURLWithPath: "/tmp/whisp-test-no-models-app", isDirectory: true)
+
         let storageDirectory = WhisperKitStorage.storageDirectory(
-            documentsDirectory: documentsDirectory,
-            applicationSupportDirectory: applicationSupportDirectory
+            documentsDirectory: fakeDocuments,
+            applicationSupportDirectory: fakeAppSupport
         )
 
-        XCTAssertEqual(downloadBase?.path, "/tmp/whisp-documents/huggingface")
-        XCTAssertEqual(
-            storageDirectory?.path,
-            "/tmp/whisp-documents/huggingface/models/argmaxinc/whisperkit-coreml"
+        XCTAssertNotNil(storageDirectory)
+        XCTAssertTrue(
+            storageDirectory!.path.contains("Documents/Models/WhisperKit"),
+            "Expected unified storage directory, got: \(storageDirectory!.path)"
         )
     }
 

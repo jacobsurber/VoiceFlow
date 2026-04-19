@@ -6,11 +6,7 @@ internal enum HuggingFaceCache {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
 
-        if let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            return appSupport.appendingPathComponent("Whisp/huggingface-cache", isDirectory: true)
-        }
-
-        return fileManager.temporaryDirectory.appendingPathComponent("huggingface-cache", isDirectory: true)
+        return ModelStoragePaths.huggingFaceHome(fileManager: fileManager)
     }
 
     static func hubDirectory(rootDirectory: URL? = nil, fileManager: FileManager = .default) -> URL {

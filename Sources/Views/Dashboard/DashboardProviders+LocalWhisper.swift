@@ -183,8 +183,7 @@ extension DashboardProvidersView {
         let storagePath =
             WhisperKitStorage.storageDirectory()?.path
             ?? WhisperKitStorage.downloadBaseDirectory()?.path
-            ?? FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Documents/huggingface/models").path
+            ?? ModelStoragePaths.whisperKitBase().path
 
         return VStack(alignment: .leading, spacing: DashboardTheme.Spacing.sm) {
             HStack {
