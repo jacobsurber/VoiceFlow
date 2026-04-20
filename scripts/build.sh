@@ -433,4 +433,9 @@ fi
 
 echo "✅ Build complete!"
 echo ""
-open -R Whisp.app
+
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+  echo "📦 Built artifact: Whisp.app"
+else
+  open -R Whisp.app
+fi
