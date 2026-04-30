@@ -12,6 +12,9 @@ internal struct DashboardPreferencesView: View {
     @AppStorage(AppDefaults.Keys.playCompletionSound) private var playCompletionSound = true
     @AppStorage(AppDefaults.Keys.maxModelStorageGB) private var maxModelStorageGB = 5.0
     @AppStorage("selectedMicrophone") private var selectedMicrophone = ""
+    @AppStorage(AppDefaults.Keys.showDockIcon) private var showDockIcon = false
+    @AppStorage(AppDefaults.Keys.showMenuBarIcon) private var showMenuBarIcon = true
+    @AppStorage(AppDefaults.Keys.showDockTooltip) private var showDockTooltip = true
 
     @State private var loginItemError: String?
     @State private var availableMicrophones: [AVCaptureDevice] = []
@@ -55,6 +58,40 @@ internal struct DashboardPreferencesView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                }
+
+                Toggle(isOn: $showDockTooltip) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Dock Hover Tooltip")
+                        Text("Show a tooltip when hovering the floating pill.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(!floatingMicrophoneDockEnabled)
+
+                Toggle(isOn: $showDockIcon) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show Dock Icon")
+                        Text("Display Whisp in the macOS Dock.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .onChange(of: showDockIcon) { _, _ in
+                    NotificationCenter.default.post(name: .iconVisibilityPreferencesChanged, object: nil)
+                }
+
+                Toggle(isOn: $showMenuBarIcon) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show Menu Bar Icon")
+                        Text("Display the Whisp icon in the menu bar.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .onChange(of: showMenuBarIcon) { _, _ in
+                    NotificationCenter.default.post(name: .iconVisibilityPreferencesChanged, object: nil)
                 }
 
                 Toggle(isOn: $autoBoostMicrophoneVolume) {
